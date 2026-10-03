@@ -4,6 +4,15 @@
   "main": "src/index.js",
   "compatibility_date": "2026-10-03",
   "workers_dev": true,
+  "d1_databases": [
+    { "binding": "DB", "database_name": "techfieldtest-db", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [
+    { "binding": "ASSETS", "bucket_name": "techfieldtest-assets" }
+  ],
+  "rules": [
+    { "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }
+  ],
   "observability": {
     "enabled": true
   }

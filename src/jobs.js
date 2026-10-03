@@ -1,4 +1,5 @@
 import initialSchema from '../migrations/0001_jobs.sql';
+import productionSchema from '../migrations/0002_production.sql';
 
 const initialized = new WeakMap();
 export const DEFAULT_TOPIC = 'Compare AI meeting note takers using the same recorded meeting';
@@ -8,7 +9,7 @@ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 // run `wrangler deploy` directly. Later schema changes use versioned migrations.
 export async function ensureSchema(db) {
   if (!initialized.has(db)) {
-    const pending = db.batch(initialSchema.split(';').map(sql => sql.trim()).filter(Boolean).map(sql => db.prepare(sql)));
+    const pending = db.batch((initialSchema + '\n' + productionSchema).split(';').map(sql => sql.trim()).filter(Boolean).map(sql => db.prepare(sql)));
     initialized.set(db, pending);
     pending.catch(() => initialized.delete(db));
   }
@@ -21,6 +22,9 @@ export function presentVideo(row) {
     createdAt: row.created_at, updatedAt: row.updated_at,
     error: row.error,
     briefUrl: '/api/videos/' + row.id + '/brief',
+    researchUrl: row.research_key ? '/api/videos/' + row.id + '/research' : null,
+    scriptUrl: row.script_key ? '/api/videos/' + row.id + '/script' : null,
+    productionStatus: row.production_status || null,
   };
 }
 
@@ -28,7 +32,9 @@ export async function listVideos(env) {
   await ensureSchema(env.DB);
   // Today follows the owner's timezone, including daylight saving changes.
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-  const { results } = await env.DB.prepare('SELECT * FROM videos ORDER BY created_at DESC, id DESC LIMIT 100').all();
+  const { results } = await env.DB.prepare(`SELECT v.*, p.research_key, p.script_key, p.status AS production_status
+    FROM videos v LEFT JOIN production_runs p ON p.video_id = v.id
+    ORDER BY v.created_at DESC, v.id DESC LIMIT 100`).all();
   const counts = await env.DB.prepare(`SELECT
     COALESCE(SUM(status = 'awaiting_approval'), 0) AS awaitingApproval,
     COALESCE(SUM(status = 'published'), 0) AS published,
@@ -42,7 +48,7 @@ export async function listVideos(env) {
   return { summary: { ...counts, videosToday }, videos: results.map(presentVideo) };
 }
 
-export async function createVideo(env, id, topic) {
+export async function createVideo(env, id, topic, sourceUrls = []) {
   await ensureSchema(env.DB);
   const now = new Date().toISOString();
   const manifestKey = 'jobs/' + id + '/brief.json';
@@ -52,19 +58,24 @@ export async function createVideo(env, id, topic) {
     const row = await env.DB.prepare('SELECT * FROM videos WHERE id = ?').bind(id).first();
     if (row.topic !== topic) return { code: 409, error: 'This request ID belongs to a different topic. Start a new job.' };
     if (row.status === 'creating') return { code: 409, error: 'This job is still being saved. Retry shortly using the same request ID.' };
-    if (row.status === 'failed') return { code: 409, error: 'This job failed to save. Start a new job to retry.', video: presentVideo(row) };
+    if (row.status === 'failed') return { code: 409, error: 'This job failed. Start a new job to retry.', video: presentVideo(row) };
+    const existingBrief = await env.ASSETS.get(row.manifest_key);
+    if (existingBrief) {
+      const brief = await existingBrief.json();
+      if (brief.sourceUrls && JSON.stringify(brief.sourceUrls) !== JSON.stringify(sourceUrls)) return { code: 409, error: 'This request ID belongs to different sources. Start a new job.' };
+    }
     return { code: 200, video: presentVideo(row), reused: true };
   }
 
   try {
     await env.ASSETS.put(manifestKey, JSON.stringify({
-      version: 1, id, topic, createdAt: now,
+      version: 2, id, topic, sourceUrls, createdAt: now,
       format: { width: 1080, height: 1920, durationSeconds: 40 },
       platforms: ['youtube_shorts', 'instagram_reels', 'tiktok'],
       approvalRequired: true,
       stages: ['research', 'script', 'fact_check', 'voice', 'visuals', 'render', 'human_approval'],
       evidence: [],
-      notes: 'Job brief only. Research, narration and rendering have not run. Claims of hands-on testing require recorded test evidence.',
+      notes: 'Research and scripts use published source pages. Hands-on testing, narration and rendering have not run. Test claims require recorded evidence.',
     }, null, 2), { httpMetadata: { contentType: 'application/json' } });
     await env.DB.prepare("UPDATE videos SET status = 'queued', updated_at = ? WHERE id = ?").bind(new Date().toISOString(), id).run();
   } catch (error) {

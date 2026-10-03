@@ -4,6 +4,11 @@
   "main": "src/index.js",
   "compatibility_date": "2026-10-03",
   "workers_dev": true,
+  "ai": { "binding": "AI" },
+  "workflows": [
+    { "binding": "PRODUCTION", "name": "techfieldtest-production", "class_name": "ProductionWorkflow" }
+  ],
+  "vars": { "MAX_RUNS_PER_DAY": "10" },
   "d1_databases": [
     { "binding": "DB", "database_name": "techfieldtest-db", "migrations_dir": "migrations" }
   ],

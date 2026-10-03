@@ -52,6 +52,11 @@ export const dashboardHtml = `<!doctype html>
     .job-side { text-align:right; flex-shrink:0; }
     .job-side a { display:block; margin-top:10px; }
     .job-error { color:#fde7a9; margin-top:8px; font-size:12px; }
+    .draft-preview { margin-top:18px; max-width:680px; font-size:13px; line-height:1.7; }
+    .draft-preview h4 { font-size:16px; margin:10px 0; }
+    .draft-preview li { margin-bottom:16px; }
+    .draft-preview a { margin-right:8px; }
+    .secondary { border:1px solid var(--line); background:#14253c; color:#7dd3fc; padding:8px 12px; border-radius:8px; cursor:pointer; display:block; margin-top:10px; }
     @media(max-width:520px) { .job { flex-direction:column; } .job-side { text-align:left; } }
     .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 30px 0 64px; position: relative; z-index: 1; }
     .topbar { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:40px; }
@@ -104,12 +109,14 @@ export const dashboardHtml = `<!doctype html>
 
     <section class="hero">
       <article class="card hero-main">
-        <p class="eyebrow">V1 · Production engine</p>
+        <p class="eyebrow">V3 · Research + scripts</p>
         <h1>Test tech. Make the video. Learn what works.</h1>
-        <p class="hero-copy">Choose a test and save a production job. Each job starts with a brief and waits for research. Voice, rendering and publishing come next.</p>
+        <p class="hero-copy">Choose a topic. We read source pages, collect evidence and draft a 30–45 second script for your review. Voice, rendering and publishing come next.</p>
         <form id="generateForm">
           <label class="topic-label" for="topic">What should we test?</label>
           <input class="topic-input" id="topic" maxlength="240" required value="Compare AI meeting note takers using the same recorded meeting" />
+          <label class="topic-label" for="sourceUrls">Source pages (optional for meeting tools; 2–5 URLs for other topics)</label>
+          <textarea class="topic-input" id="sourceUrls" rows="2" maxlength="3000" placeholder="One product or documentation URL per line"></textarea>
           <button class="primary" id="generateBtn" type="submit">+ Generate video job</button>
         </form>
         <div class="notice" id="notice" role="status" aria-live="polite"></div>
@@ -133,13 +140,13 @@ export const dashboardHtml = `<!doctype html>
 
     <section class="metrics">
       <article class="card metric"><div class="metric-label">Jobs today</div><div class="metric-value" id="videosToday">0</div><div class="metric-sub">America/New_York</div></article>
-      <article class="card metric"><div class="metric-label">Awaiting approval</div><div class="metric-value" id="awaitingApproval">0</div><div class="metric-sub">Human checkpoint enabled</div></article>
+      <article class="card metric"><div class="metric-label">Scripts ready for review</div><div class="metric-value" id="awaitingApproval">0</div><div class="metric-sub">Human checkpoint enabled</div></article>
       <article class="card metric"><div class="metric-label">Published</div><div class="metric-value" id="published">0</div><div class="metric-sub">Across all platforms</div></article>
       <article class="card metric"><div class="metric-label">Revenue</div><div class="metric-value">$0</div><div class="metric-sub">Revenue tracking comes later</div></article>
     </section>
 
     <section class="card queue">
-      <div class="section-title"><div><h2>Content queue</h2><p>Latest 100 jobs. Research and rendering are the next steps.</p></div><div class="pill" id="queueCount">Loading…</div></div>
+      <div class="section-title"><div><h2>Content queue</h2><p>Latest 100 jobs. Progress updates automatically.</p></div><div class="pill" id="queueCount">Loading…</div></div>
       <div id="queue" aria-live="polite"><div class="empty"><p>Loading your jobs…</p></div></div>
     </section>
 
@@ -153,7 +160,36 @@ export const dashboardHtml = `<!doctype html>
     const notice = document.getElementById("notice");
     let requestId = null;
     let pendingTopic = null;
-    const labels = { creating: "Saving", queued: "Waiting for research", researching: "Researching", scripting: "Writing script", rendering: "Rendering", awaiting_approval: "Awaiting approval", approved: "Approved", published: "Published", failed: "Failed to save" };
+    let pendingSources = null;
+    const openDrafts = new Set();
+    const draftCache = new Map();
+    let refreshing = false;
+    const labels = { creating: "Saving", queued: "Waiting for research", researching: "Researching sources", scripting: "Writing script", rendering: "Rendering", awaiting_approval: "Script ready for review", approved: "Approved", published: "Published", failed: "Needs attention" };
+
+    function showDraft(parent, draft) {
+      parent.replaceChildren();
+      const title = document.createElement("h4"); title.textContent = draft.title;
+      const note = document.createElement("p"); note.textContent = draft.reviewNote + " Estimated duration: " + draft.durationSeconds + " seconds.";
+      parent.append(title, note);
+      const scenes = document.createElement("ol");
+      for (const scene of draft.scenes) {
+        const item = document.createElement("li");
+        const timing = document.createElement("strong"); timing.textContent = scene.startSeconds + "–" + scene.endSeconds + "s · " + scene.caption;
+        const narration = document.createElement("p"); narration.textContent = scene.narration;
+        const visual = document.createElement("p"); visual.textContent = "Visual: " + scene.visual;
+        item.append(timing, narration, visual);
+        for (const factId of scene.factIds) {
+          const fact = draft.facts.find(f => f.id === factId);
+          const source = draft.sources.find(s => s.id === fact.sourceId);
+          const link = document.createElement("a"); link.href = source.url; link.target = "_blank"; link.rel = "noopener"; link.textContent = source.title; link.title = fact.claim + " | Evidence: " + fact.quote; item.append(link);
+        }
+        scenes.append(item);
+      }
+      parent.append(scenes);
+      const checks = document.createElement("p"); checks.textContent = "Needs checking: " + draft.uncertainties.join(" · "); parent.append(checks);
+      const plan = document.createElement("p"); plan.textContent = "Future hands-on test: " + draft.testPlan.join(" · "); parent.append(plan);
+      if (draft.sourceFailures.length) { const failures = document.createElement("p"); failures.textContent = draft.sourceFailures.length + " source page(s) could not be read. Check the research file for details."; parent.append(failures); }
+    }
 
     async function refreshQueue() {
       const response = await fetch("/api/videos");
@@ -177,12 +213,36 @@ export const dashboardHtml = `<!doctype html>
         const meta = document.createElement("p"); meta.textContent = new Date(video.createdAt).toLocaleString() + " · " + video.id.slice(0, 8);
         main.append(title, meta);
         if (video.error) { const error = document.createElement("div"); error.className = "job-error"; error.textContent = video.error; main.append(error); }
+        if (video.scriptUrl) {
+          const preview = document.createElement("div"); preview.className = "draft-preview"; preview.hidden = !openDrafts.has(video.id);
+          const button = document.createElement("button"); button.className = "secondary"; button.textContent = preview.hidden ? "Read script" : "Hide script";
+          if (draftCache.has(video.id)) showDraft(preview, draftCache.get(video.id));
+          button.addEventListener("click", async () => {
+            if (!preview.hidden) { preview.hidden = true; openDrafts.delete(video.id); button.textContent = "Read script"; return; }
+            button.disabled = true;
+            try {
+              if (!draftCache.has(video.id)) { const response = await fetch(video.scriptUrl); const draft = await response.json(); if (!response.ok) throw new Error(draft.error); draftCache.set(video.id, draft); }
+              showDraft(preview, draftCache.get(video.id)); preview.hidden = false; openDrafts.add(video.id); button.textContent = "Hide script";
+            } catch (error) { preview.textContent = error.message; preview.hidden = false; }
+            finally { button.disabled = false; }
+          });
+          main.append(button, preview);
+        }
         const side = document.createElement("div"); side.className = "job-side";
         const status = document.createElement("span"); status.className = "pill"; status.textContent = labels[video.status] || video.status;
         side.append(status);
+        if (video.status === "queued") {
+          const start = document.createElement("button"); start.className = "secondary"; start.textContent = "Start research";
+          start.addEventListener("click", async () => {
+            start.disabled = true;
+            try { const response = await fetch("/api/videos/" + video.id + "/start", { method: "POST" }); const result = await response.json(); if (!response.ok) throw new Error(result.error); notice.textContent = result.message; notice.classList.add("show"); await refreshQueue(); }
+            catch (error) { notice.textContent = error.message; notice.classList.add("show"); start.disabled = false; }
+          }); side.append(start);
+        }
         if (video.status !== "creating" && video.status !== "failed") {
           const link = document.createElement("a"); link.href = video.briefUrl; link.textContent = "View production brief"; link.target = "_blank"; link.rel = "noopener"; side.append(link);
         }
+        if (video.researchUrl) { const link = document.createElement("a"); link.href = video.researchUrl; link.textContent = "Sources + evidence"; link.target = "_blank"; link.rel = "noopener"; side.append(link); }
         row.append(main, side); queue.append(row);
       }
     }
@@ -206,13 +266,14 @@ export const dashboardHtml = `<!doctype html>
     document.getElementById("generateForm").addEventListener("submit", async (event) => {
       event.preventDefault();
       const topic = document.getElementById("topic").value.trim();
+      const sourceUrls = document.getElementById("sourceUrls").value.split(/\\s+/).filter(Boolean);
       if (!topic) return;
-      if (pendingTopic !== topic || !requestId) { requestId = crypto.randomUUID(); pendingTopic = topic; }
+      if (pendingTopic !== topic || pendingSources !== JSON.stringify(sourceUrls) || !requestId) { requestId = crypto.randomUUID(); pendingTopic = topic; pendingSources = JSON.stringify(sourceUrls); }
       generateBtn.disabled = true;
       generateBtn.textContent = "Saving job…";
       notice.classList.remove("show");
       try {
-        const response = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": requestId }, body: JSON.stringify({ topic }) });
+        const response = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": requestId }, body: JSON.stringify({ topic, sourceUrls }) });
         const result = await response.json();
         if (!response.ok) {
           if (result.video && result.video.status === "failed") requestId = null;
@@ -232,6 +293,12 @@ export const dashboardHtml = `<!doctype html>
     });
 
     boot();
+    setInterval(async () => {
+      if (document.hidden || refreshing || generateBtn.disabled) return;
+      refreshing = true;
+      try { await refreshQueue(); } catch (error) { apiStatus.textContent = error.message; }
+      finally { refreshing = false; }
+    }, 5000);
   </script>
 </body>
 </html>`;

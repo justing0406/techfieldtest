@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { Miniflare, Log, LogLevel } from 'miniflare';
-import { RESEARCH_QUOTE, SCRIPT_FIXTURE } from './fixtures.js';
+import { RESEARCH_QUOTE, SCRIPT_FIXTURE, RESEARCH_FACTS, EDITOR_FIXTURE } from './fixtures.js';
 
 const require = createRequire(import.meta.url);
 process.env.MINIFLARE_WORKERD_PATH = createRequire(require.resolve('wrangler/package.json'))('workerd').default;
@@ -23,8 +23,10 @@ function makeRuntime(mode = 'ok', limit = '2') {
           if (this.env.MODE === 'bad-json') return { response: 'Invalid JSON' };
           if (input.prompt.startsWith('TASK: RESEARCH')) {
             const sources = JSON.parse(input.prompt.split('SOURCE_DATA: ')[1]);
-            return { response: JSON.stringify({ facts: sources.map(s => ({ sourceId:s.id,claim:'The page describes transcripts and meeting summaries.',quote:${JSON.stringify(RESEARCH_QUOTE)} })), uncertainties:['Quality has not been measured.'],testPlan:['Compare the same meeting recording.'] }) };
+            const facts = ${JSON.stringify(RESEARCH_FACTS)}.map((fact, i) => ({ ...fact, sourceId: sources[i].id }));
+            return { response: JSON.stringify({ facts, uncertainties:['Quality has not been measured.'],testPlan:['Compare the same meeting recording.'] }) };
           }
+          if (input.prompt.startsWith('TASK: EDITOR')) return { response: JSON.stringify(${JSON.stringify(EDITOR_FIXTURE)}) };
           return { response: JSON.stringify(${JSON.stringify(SCRIPT_FIXTURE)}) };
         }
       }
@@ -88,5 +90,41 @@ test('invalid model output retries then records a failed job without a script', 
     assert.match(failed.error, /invalid JSON/);
     assert.equal(failed.scriptUrl, null);
     assert.equal((await mf.dispatchFetch('https://example.com/api/videos/' + failed.id + '/script')).status, 404);
+  } finally { await mf.dispose(); }
+});
+
+test('regeneration preserves the original draft and safely reuses a retried revision request', async () => {
+  const mf = makeRuntime();
+  try {
+    const original = await (await post(mf, '/api/generate', { topic: 'Compare meeting workflows', sourceUrls: urls })).json();
+    const ready = await waitFor(mf, original.video.id, 'awaiting_approval');
+    const before = await (await mf.dispatchFetch('https://example.com' + ready.scriptUrl)).text();
+    const revisionId = crypto.randomUUID();
+    const regenerate = () => mf.dispatchFetch('https://example.com/api/videos/' + ready.id + '/regenerate', {
+      method: 'POST', headers: { 'Idempotency-Key': revisionId },
+    });
+    const response = await regenerate();
+    assert.equal(response.status, 201);
+    const revision = await response.json();
+    assert.equal(revision.parentVideoId, ready.id);
+    assert.equal(revision.video.id, revisionId);
+    assert.equal(revision.pipeline.started, true);
+    await waitFor(mf, revisionId, 'awaiting_approval');
+    const brief = await (await mf.dispatchFetch('https://example.com/api/videos/' + revisionId + '/brief')).json();
+    assert.equal(brief.parentVideoId, ready.id);
+    assert.deepEqual(brief.sourceUrls, urls);
+    assert.equal(await (await mf.dispatchFetch('https://example.com' + ready.scriptUrl)).text(), before);
+    const retried = await regenerate();
+    assert.equal(retried.status, 200);
+    assert.equal((await retried.json()).reused, true);
+    assert.equal((await queue(mf)).videos.length, 2);
+    const collision = await mf.dispatchFetch('https://example.com/api/videos/' + ready.id + '/regenerate', {
+      method: 'POST', headers: { 'Idempotency-Key': ready.id },
+    });
+    assert.equal(collision.status, 409);
+    const blocked = await mf.dispatchFetch('https://example.com/api/videos/' + ready.id + '/regenerate', {
+      method: 'POST', headers: { Origin: 'https://other.com' },
+    });
+    assert.equal(blocked.status, 403);
   } finally { await mf.dispose(); }
 });

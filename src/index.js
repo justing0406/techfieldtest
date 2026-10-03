@@ -1,6 +1,6 @@
 import { dashboardHtml } from './dashboard.js';
 import { createVideo, DEFAULT_TOPIC, ensureSchema, listVideos, UUID } from './jobs.js';
-import { selectSources } from './sources.js';
+import { selectSources, refreshedSources } from './sources.js';
 import { startProduction } from './workflow.js';
 export { ProductionWorkflow } from './workflow.js';
 
@@ -52,11 +52,11 @@ export default {
         if (!storage.d1 || !storage.r2) throw new Error('Missing bindings');
         await ensureSchema(env.DB);
         await env.ASSETS.head('__health_probe__');
-        return json({ status: 'ok', service: 'techfieldtest', version: '0.3.0', storage,
+        return json({ status: 'ok', service: 'techfieldtest', version: '0.4.0', storage,
           pipeline: { ai: Boolean(env.AI), workflow: Boolean(env.PRODUCTION) }, timestamp: new Date().toISOString() });
       } catch (error) {
         console.error('Storage health check failed', error);
-        return json({ status: 'degraded', service: 'techfieldtest', version: '0.3.0', storage,
+        return json({ status: 'degraded', service: 'techfieldtest', version: '0.4.0', storage,
           message: 'Storage is not ready. Check the Cloudflare build logs and DB / ASSETS bindings.' }, 503);
       }
     }
@@ -67,8 +67,10 @@ export default {
     const isArtifact = artifactMatch && request.method === 'GET';
     const startMatch = url.pathname.match(/^\/api\/videos\/([^/]+)\/start$/);
     const isStart = startMatch && request.method === 'POST';
-    if (!isList && !isCreate && !isArtifact && !isStart) return json({ error: 'Not found' }, 404);
-    if (isCreate || isStart) {
+    const regenerateMatch = url.pathname.match(/^\/api\/videos\/([^/]+)\/regenerate$/);
+    const isRegenerate = regenerateMatch && request.method === 'POST';
+    if (!isList && !isCreate && !isArtifact && !isStart && !isRegenerate) return json({ error: 'Not found' }, 404);
+    if (isCreate || isStart || isRegenerate) {
       const origin = request.headers.get('origin');
       if ((origin && origin !== url.origin) || request.headers.get('sec-fetch-site') === 'cross-site') {
         return json({ error: 'Cross-site job creation is not allowed.' }, 403);
@@ -78,6 +80,29 @@ export default {
 
     try {
       if (isList) return json(await listVideos(env));
+      if (isRegenerate) {
+        if (!UUID.test(regenerateMatch[1])) return json({ error: 'Not found' }, 404);
+        const parentId = regenerateMatch[1].toLowerCase();
+        await ensureSchema(env.DB);
+        const parent = await env.DB.prepare('SELECT * FROM videos WHERE id = ?').bind(parentId).first();
+        if (!parent) return json({ error: 'Job not found.' }, 404);
+        if (!['awaiting_approval', 'failed'].includes(parent.status)) return json({ error: 'Wait for the current draft to finish before regenerating.' }, 409);
+        const briefObject = await env.ASSETS.get(parent.manifest_key);
+        if (!briefObject) return json({ error: 'Original brief is unavailable.' }, 409);
+        const brief = await briefObject.json();
+        const id = request.headers.get('Idempotency-Key') || crypto.randomUUID();
+        if (!UUID.test(id)) return json({ error: 'Idempotency-Key must be a version 4 UUID.' }, 400);
+        let sources;
+        try { sources = refreshedSources(parent.topic, brief.sourceUrls); }
+        catch (error) { return json({ error: error.message }, 400); }
+        const result = await createVideo(env, id.toLowerCase(), parent.topic, sources, parentId);
+        if (result.error) return json({ error: result.error }, result.code);
+        let pipeline;
+        try { pipeline = await startProduction(env, result.video.id); }
+        catch (error) { pipeline = { started: false, error: error.message, code: error.code || 503 }; }
+        return json({ video: result.video, reused: result.reused, pipeline, parentVideoId: parentId,
+          message: pipeline.error || (pipeline.started ? 'A new draft is being generated. Your previous script is preserved.' : pipeline.message) }, result.code);
+      }
       if (isStart) {
         if (!UUID.test(startMatch[1])) return json({ error: 'Not found' }, 404);
         return json(await startProduction(env, startMatch[1].toLowerCase()), 202);

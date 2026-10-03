@@ -1,7 +1,17 @@
-export const MEETING_SOURCES = [
+export const LEGACY_MEETING_SOURCES = [
   'https://otter.ai/pricing', 'https://fireflies.ai/pricing',
   'https://www.fathom.ai/pricing', 'https://www.granola.ai/pricing', 'https://tldv.io/pricing/',
 ];
+export const MEETING_SOURCES = [
+  'https://otter.ai/pricing',
+  'https://guide.fireflies.ai/articles/2631950139-learn-about-transcription-credits-storage-and-rate-limits-for-meetings',
+  'https://www.fathom.ai/pricing', 'https://www.granola.ai/', 'https://tldv.io/',
+];
+
+export function refreshedSources(topic, urls) {
+  const isLegacy = !urls?.length || (urls.length === LEGACY_MEETING_SOURCES.length && urls.every(url => LEGACY_MEETING_SOURCES.includes(url)));
+  return selectSources(topic, isLegacy ? [] : urls);
+}
 
 export function publicSourceUrl(value) {
   if (typeof value !== 'string' || value.length > 600) throw new Error('Source URLs must be public HTTPS pages.');
@@ -64,7 +74,7 @@ export async function fetchSource(value, id, fetcher = fetch) {
   // The deadline covers redirects and the body, not just the response headers.
   const signal = AbortSignal.timeout(15000);
   for (let redirects = 0; redirects <= 3; redirects++) {
-    const response = await fetcher(url, { redirect: 'manual', signal, headers: { Accept: 'text/html,text/plain', 'User-Agent': 'TechFieldTest/0.3 source research' } });
+    const response = await fetcher(url, { redirect: 'manual', signal, headers: { Accept: 'text/html,text/plain', 'User-Agent': 'TechFieldTest/0.4 source research' } });
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('location');
       await response.body?.cancel();

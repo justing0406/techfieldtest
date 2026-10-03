@@ -109,12 +109,12 @@ export const dashboardHtml = `<!doctype html>
 
     <section class="hero">
       <article class="card hero-main">
-        <p class="eyebrow">V3 · Research + scripts</p>
+        <p class="eyebrow">V4 · Research + editorial review</p>
         <h1>Test tech. Make the video. Learn what works.</h1>
         <p class="hero-copy">Choose a topic. We read source pages, collect evidence and draft a 30–45 second script for your review. Voice, rendering and publishing come next.</p>
         <form id="generateForm">
           <label class="topic-label" for="topic">What should we test?</label>
-          <input class="topic-input" id="topic" maxlength="240" required value="Compare AI meeting note takers using the same recorded meeting" />
+          <input class="topic-input" id="topic" maxlength="240" required value="Which free meeting note taker fits your meetings?" />
           <label class="topic-label" for="sourceUrls">Source pages (optional for meeting tools; 2–5 URLs for other topics)</label>
           <textarea class="topic-input" id="sourceUrls" rows="2" maxlength="3000" placeholder="One product or documentation URL per line"></textarea>
           <button class="primary" id="generateBtn" type="submit">+ Generate video job</button>
@@ -163,6 +163,7 @@ export const dashboardHtml = `<!doctype html>
     let pendingSources = null;
     const openDrafts = new Set();
     const draftCache = new Map();
+    const regenerateIds = new Map();
     let refreshing = false;
     const labels = { creating: "Saving", queued: "Waiting for research", researching: "Researching sources", scripting: "Writing script", rendering: "Rendering", awaiting_approval: "Script ready for review", approved: "Approved", published: "Published", failed: "Needs attention" };
 
@@ -227,6 +228,18 @@ export const dashboardHtml = `<!doctype html>
             finally { button.disabled = false; }
           });
           main.append(button, preview);
+        }
+        if (video.scriptUrl || video.status === "failed") {
+          const regenerate = document.createElement("button"); regenerate.className = "secondary"; regenerate.textContent = "Regenerate script";
+          regenerate.addEventListener("click", async () => {
+            if (!regenerateIds.has(video.id)) regenerateIds.set(video.id, crypto.randomUUID());
+            regenerate.disabled = true; regenerate.textContent = "Starting new draft…";
+            try {
+              const response = await fetch("/api/videos/" + video.id + "/regenerate", { method: "POST", headers: { "Idempotency-Key": regenerateIds.get(video.id) } });
+              const result = await response.json(); if (!response.ok) throw new Error(result.error);
+              regenerateIds.delete(video.id); notice.textContent = result.message; notice.classList.add("show"); await refreshQueue();
+            } catch (error) { notice.textContent = error.message; notice.classList.add("show"); regenerate.disabled = false; regenerate.textContent = "Regenerate script"; }
+          }); main.append(regenerate);
         }
         const side = document.createElement("div"); side.className = "job-side";
         const status = document.createElement("span"); status.className = "pill"; status.textContent = labels[video.status] || video.status;

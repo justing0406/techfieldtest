@@ -2,7 +2,7 @@
 
 Control room for the TechFieldTest content pipeline: TikTok, Instagram Reels and YouTube Shorts.
 
-## V0.3: research and script drafts
+## V0.4: focused scripts and editorial review
 
 Enter a topic and click **Generate video job**. The Worker saves a D1 record and R2 brief, then starts a durable Cloudflare Workflow. It reads source pages, extracts source-backed facts, and generates a timed 30–45 second script using Workers AI. The dashboard polls progress and displays **Script ready for review** when the draft is saved. Click **Read script** for narration, captions, scene timing, visual directions and source links.
 
@@ -10,17 +10,21 @@ This milestone creates a research packet and script, not an MP4. Voice, renderin
 
 ### Research scope
 
-Meeting-note topics use the official Otter, Fireflies, Fathom, Granola and tl;dv pricing pages as the initial source catalog. Other topics require 2–5 source URLs in the dashboard. Prefer product and documentation pages. This version fetches those pages; it does not perform an open-web search or operate the products.
+Meeting-note topics use official Otter and Fathom pricing pages, Fireflies limits documentation, and Granola and tl;dv product pages as the initial source catalog. Other topics require 2–5 source URLs in the dashboard. Prefer product and documentation pages. This version fetches those pages; it does not perform an open-web search or operate the products.
 
 At least two pages must be readable. Failed pages are listed in the research packet and draft; blocked or JavaScript-only pages may need a different URL. Source URLs and redirects are validated, page reads are bounded, and scripts, navigation and styles are removed from the source text. Each source has its retrieval time and a SHA-256 hash of the extracted excerpt.
 
-Workers AI first extracts one fact per used source with a short evidence quote. The Worker verifies that each quote appears in the corresponding page, then makes a second model call for the script. Draft validation checks scene lengths, total duration, spoken word count, fact references and unsupported testing claims. Quote matching verifies evidence presence; it does not prove semantic correctness. Review prices, plan context and comparisons before publishing.
+Workers AI extracts several decision-relevant facts per product, up to four per source, with exact evidence quotes totaling at most 25 unique words per source. The Worker verifies those quotes against the fetched pages. The writer then chooses one angle and focuses on two or three relevant products, with a specific hook, concrete contrasts and a useful conditional takeaway.
+
+Draft validation checks scene lengths, total duration, spoken word count, fact references and unsupported testing claims. Additional checks reject generic productivity introductions, empty endings, section-label captions and repeated product-page visuals. A separate model call reviews support and editorial usefulness; a failed draft receives feedback and one rewrite. A draft that still fails is marked failed instead of ready. Automated checks do not establish real-world product quality or prove semantic correctness. Review prices, plan context and comparisons before publishing.
 
 ### Generation and limits
 
-The native `AI` binding uses `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. No separate API key is required. The `PRODUCTION` Workflow binding survives closing the dashboard and retries each failed step once. Research and script generation can consume Workers AI and Workflows usage under your Cloudflare plan. Set `AI_MODEL` to change the model only to one supporting the same JSON-mode input.
+The native `AI` binding uses `@cf/openai/gpt-oss-120b`. No separate API key is required. The `PRODUCTION` Workflow binding survives closing the dashboard and retries each failed step once. Research, writing and editorial review consume Workers AI and Workflows usage under your Cloudflare plan. One successful step uses one research call and up to two writer/editor pairs; workflow retries can add calls. Set `AI_MODEL` to change the model only to one supporting the same JSON-mode input.
 
-An atomic D1 reservation limits the project to 10 research starts per UTC day by default (`MAX_RUNS_PER_DAY` in `wrangler.jsonc`). A capped job stays saved and can be started the next day. An idempotent Workflow submission prevents double runs when a request is retried. Previously saved queued jobs have a **Start research** button; their meeting-tool sources are selected automatically. Failed production runs retain their error and any completed research. Create a new job to retry a failed generation run.
+An atomic D1 reservation limits the project to 10 research starts per UTC day by default (`MAX_RUNS_PER_DAY` in `wrangler.jsonc`). A capped job stays saved and can be started the next day. An idempotent Workflow submission prevents double runs when a request is retried. Previously saved queued jobs have a **Start research** button; their meeting-tool sources are selected automatically. Failed production runs retain their error and any completed research.
+
+Click **Regenerate script** on a ready or failed job to create a fresh revision. It preserves the original job and script, links the new brief to the original ID, and counts toward the same daily limit. Old default meeting sources are refreshed to the current catalog; custom URLs are retained. Request retries reuse the same revision ID.
 
 ### Storage
 
@@ -40,7 +44,7 @@ The additive schemas in `migrations/0001_jobs.sql` and `0002_production.sql` are
 After the build succeeds, open `/api/health`. Expect HTTP 200 and:
 
 ```json
-{"status":"ok","version":"0.3.0","storage":{"d1":true,"r2":true},"pipeline":{"ai":true,"workflow":true}}
+{"status":"ok","version":"0.4.0","storage":{"d1":true,"r2":true},"pipeline":{"ai":true,"workflow":true}}
 ```
 
 Health checks storage and binding presence; it does not make a paid inference request. Open the dashboard, create a job, wait for **Script ready for review**, and click **Read script** to check live inference and sources.
@@ -67,7 +71,7 @@ Wrangler uses local D1 and R2 storage. The initial schema is created on first us
 npm test
 ```
 
-Tests bundle the Worker and use Miniflare's actual D1, R2 and Workflow implementations. Model replies and fetched page content are fixtures. They cover job creation, persistence, idempotency, input validation, missing bindings, R2 failure, source extraction, evidence matching, script validation, workflow success/failure, existing jobs and the daily cap. They do not call a live model or establish real-world product quality.
+Tests bundle the Worker and use Miniflare's actual D1, R2 and Workflow implementations. Model replies and fetched page content are fixtures. They cover job creation, persistence, idempotency, input validation, missing bindings, R2 failure, source extraction, evidence matching, script validation, editorial rejection and rewriting, supported model response formats, workflow success/failure, regeneration preserving the original, existing jobs and the daily cap. They do not call a live model or establish real-world product quality.
 
 ```bash
 npm run build
@@ -90,6 +94,7 @@ npm run db:migrate:remote
 | `GET /api/videos` | Latest 100 jobs and counts across all jobs; today's count uses America/New_York |
 | `POST /api/generate` | Persists a job and brief and submits research; 201 new / 200 existing |
 | `POST /api/videos/<uuid>/start` | Starts a previously queued job; 202 accepted / 429 cap |
+| `POST /api/videos/<uuid>/regenerate` | Creates a revision of a ready or failed job while preserving the original; 201 new / 200 reused |
 | `GET /api/videos/<uuid>/brief` | Streams the job's JSON brief from R2 |
 | `GET /api/videos/<uuid>/research` | Saved source excerpts, evidence facts, uncertainties and test plan |
 | `GET /api/videos/<uuid>/script` | Timed draft with narration, captions, visuals, fact references and sources |

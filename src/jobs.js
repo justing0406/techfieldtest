@@ -2,7 +2,7 @@ import initialSchema from '../migrations/0001_jobs.sql';
 import productionSchema from '../migrations/0002_production.sql';
 
 const initialized = new WeakMap();
-export const DEFAULT_TOPIC = 'Compare AI meeting note takers using the same recorded meeting';
+export const DEFAULT_TOPIC = 'Which free meeting note taker fits your meetings?';
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // Bootstrap the additive initial schema on first use, including deployments that
@@ -48,7 +48,7 @@ export async function listVideos(env) {
   return { summary: { ...counts, videosToday }, videos: results.map(presentVideo) };
 }
 
-export async function createVideo(env, id, topic, sourceUrls = []) {
+export async function createVideo(env, id, topic, sourceUrls = [], parentVideoId = null) {
   await ensureSchema(env.DB);
   const now = new Date().toISOString();
   const manifestKey = 'jobs/' + id + '/brief.json';
@@ -63,13 +63,14 @@ export async function createVideo(env, id, topic, sourceUrls = []) {
     if (existingBrief) {
       const brief = await existingBrief.json();
       if (brief.sourceUrls && JSON.stringify(brief.sourceUrls) !== JSON.stringify(sourceUrls)) return { code: 409, error: 'This request ID belongs to different sources. Start a new job.' };
+      if ((brief.parentVideoId || null) !== parentVideoId) return { code: 409, error: 'This request ID belongs to a different draft revision.' };
     }
     return { code: 200, video: presentVideo(row), reused: true };
   }
 
   try {
     await env.ASSETS.put(manifestKey, JSON.stringify({
-      version: 2, id, topic, sourceUrls, createdAt: now,
+      version: 3, id, topic, sourceUrls, parentVideoId, createdAt: now,
       format: { width: 1080, height: 1920, durationSeconds: 40 },
       platforms: ['youtube_shorts', 'instagram_reels', 'tiktok'],
       approvalRequired: true,

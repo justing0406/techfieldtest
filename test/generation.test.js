@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { collectSources, fetchSource, publicSourceUrl, selectSources, visibleText } from '../src/sources.js';
-import { generateResearch, generateScript, validateResearch, validateScript } from '../src/generation.js';
+import { generateResearch, generateScript, validateResearch, validateScript, editorialIssues } from '../src/generation.js';
 
-import { RESEARCH_QUOTE, SCRIPT_FIXTURE } from './fixtures.js';
+import { RESEARCH_QUOTE, SCRIPT_FIXTURE, RESEARCH_FACTS, EDITOR_FIXTURE } from './fixtures.js';
 
 const sources = ['S1', 'S2'].map(id => ({ id, text: RESEARCH_QUOTE + ' Published feature details.' }));
-const data = { facts: sources.map(s => ({ sourceId: s.id, claim: 'The page describes transcripts and summaries.', quote: RESEARCH_QUOTE })), uncertainties: ['Quality has not been measured.'], testPlan: ['Compare the same meeting recording.'] };
+const data = { facts: RESEARCH_FACTS, uncertainties: ['Quality has not been measured.'], testPlan: ['Compare the same meeting recording.'] };
 
 test('research requires exact source evidence and scripts require citations and honest test status', async () => {
   const research = validateResearch(data, sources);
@@ -18,10 +18,41 @@ test('research requires exact source evidence and scripts require citations and 
   assert.throws(() => validateResearch({ ...data, facts: [{ ...data.facts[0], sourceId: 'S9' }, data.facts[1]] }, sources), /unknown/);
   assert.throws(() => validateScript({ ...SCRIPT_FIXTURE, title: 'I tested them' }, research), /claims testing/);
   assert.throws(() => validateScript({ ...SCRIPT_FIXTURE, scenes: SCRIPT_FIXTURE.scenes.map((s, i) => i === 1 ? { ...s, factIds: ['F9'] } : s) }, research), /unknown fact/);
-  const ai = { async run(model, input) { return { response: JSON.stringify(input.prompt.startsWith('TASK: RESEARCH') ? data : SCRIPT_FIXTURE) }; } };
+  const ai = { async run(model, input) { return { response: JSON.stringify(input.prompt.startsWith('TASK: RESEARCH') ? data : input.prompt.startsWith('TASK: EDITOR') ? EDITOR_FIXTURE : SCRIPT_FIXTURE) }; } };
   assert.equal((await generateResearch(ai, 'Compare', sources)).facts.length, 2);
   assert.equal((await generateScript(ai, 'Compare', research)).durationSeconds, 40);
   await assert.rejects(() => generateResearch({ run: async () => ({ response: 'not JSON' }) }, 'Compare', sources), /invalid JSON/);
+});
+
+test('the first live draft pattern is rejected and rewritten with actionable editor feedback', async () => {
+  const research = validateResearch(data, sources);
+  const bad = { ...SCRIPT_FIXTURE, scenes: SCRIPT_FIXTURE.scenes.map((scene, i) => i === 0 ? { ...scene, narration: 'AI meeting note takers can help you stay organized and focused during meetings.', factIds: [] } : i === 3 ? { ...scene, narration: "While these AI meeting note takers offer various features, it's essential to test and compare them to find the best fit for your needs.", factIds: [] } : scene) };
+  assert.ok(editorialIssues(validateScript(bad, research)).length >= 4);
+  let drafts = 0;
+  const prompts = [];
+  const ai = { async run(model, input) {
+    prompts.push(input.prompt);
+    return { response: JSON.stringify(input.prompt.startsWith('TASK: EDITOR') ? EDITOR_FIXTURE : ++drafts === 1 ? bad : SCRIPT_FIXTURE) };
+  } };
+  const result = await generateScript(ai, 'Meeting tools', research);
+  assert.equal(result.editorialReview.attempts, 2);
+  assert.match(prompts.findLast(p => p.startsWith('TASK: SCRIPT')), /Replace the generic introduction/);
+  await assert.rejects(() => generateScript({ run: async (model, input) => ({ response: JSON.stringify(input.prompt.startsWith('TASK: EDITOR') ? EDITOR_FIXTURE : bad) }) }, 'Meeting tools', research), /did not pass editorial/);
+});
+
+test('multiple useful facts per source are accepted within a shared quote budget', () => {
+  const research = validateResearch({ ...data, facts: [...data.facts, { ...data.facts[0], claim: 'Starter offers a free plan.', dimension: 'pricing' }] }, sources);
+  assert.equal(research.facts.length, 3);
+});
+
+test('model output supports native, chat and Responses formats and editor failures are enforced', async () => {
+  const research = validateResearch(data, sources);
+  for (const wrap of [value => ({ choices: [{ message: { content: JSON.stringify(value) } }] }), value => ({ output: [{ type: 'reasoning', content: [{ type: 'output_text', text: 'ignore reasoning' }] }, { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: JSON.stringify(value) }] }] })]) {
+    const ai = { run: async (model, input) => wrap(input.prompt.startsWith('TASK: EDITOR') ? EDITOR_FIXTURE : SCRIPT_FIXTURE) };
+    assert.equal((await generateScript(ai, 'Meeting tools', research)).editorialReview.score, 9);
+  }
+  const ai = { run: async (model, input) => ({ response: input.prompt.startsWith('TASK: EDITOR') ? { ...EDITOR_FIXTURE, score: 3, supported: false, issues: ['The recommendation is not supported.'] } : SCRIPT_FIXTURE }) };
+  await assert.rejects(() => generateScript(ai, 'Meeting tools', research), /not supported/);
 });
 
 test('source fetching excludes scripts, checks redirects and reports partial source failures', async () => {

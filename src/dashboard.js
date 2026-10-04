@@ -220,6 +220,8 @@ export const dashboardHtml = `<!doctype html>
       const response = await fetch("/api/videos");
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not load jobs");
+      // Playback may start while the polling requests are still in flight.
+      if (playingVideos.size || ["TEXTAREA","INPUT"].includes(document.activeElement?.tagName)) return;
       document.getElementById("videosToday").textContent = data.summary.videosToday;
       document.getElementById("awaitingApproval").textContent = data.summary.awaitingApproval;
       document.getElementById("published").textContent = data.summary.published;

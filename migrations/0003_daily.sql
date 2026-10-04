@@ -23,3 +23,8 @@ CREATE TABLE IF NOT EXISTS render_runs (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS render_runs_status ON render_runs(status, lease_until);
+CREATE TABLE IF NOT EXISTS pipeline_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);

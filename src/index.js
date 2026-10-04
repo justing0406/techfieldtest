@@ -60,7 +60,8 @@ export default {
         await env.ASSETS.head('__health_probe__');
         return json({ status: 'ok', service: 'techfieldtest', version: '0.5.0', storage,
           pipeline: { ai: Boolean(env.AI), workflow: Boolean(env.PRODUCTION), daily: env.DAILY_ENABLED === 'true',
-            renderer: Boolean(env.RENDER_REPOSITORY_ID), publishing: false, analytics: false }, timestamp: new Date().toISOString() });
+            renderer: Boolean(env.RENDER_REPOSITORY_ID), dailyModel: env.DAILY_AI_MODEL || null,
+            researchJournal: true, publishing: false, analytics: false }, timestamp: new Date().toISOString() });
       } catch (error) {
         console.error('Storage health check failed', error);
         return json({ status: 'degraded', service: 'techfieldtest', version: '0.5.0', storage,
@@ -70,7 +71,7 @@ export default {
 
     const isList = url.pathname === '/api/videos' && request.method === 'GET';
     const isCreate = url.pathname === '/api/generate' && request.method === 'POST';
-    const artifactMatch = url.pathname.match(/^\/api\/videos\/([^/]+)\/(brief|research|script)$/);
+    const artifactMatch = url.pathname.match(/^\/api\/videos\/([^/]+)\/(brief|research|script|research-input|research-output)$/);
     const isArtifact = artifactMatch && request.method === 'GET';
     const startMatch = url.pathname.match(/^\/api\/videos\/([^/]+)\/start$/);
     const isStart = startMatch && request.method === 'POST';
@@ -116,8 +117,10 @@ export default {
         return json({ reviewed: true, decision: body.decision, published: false });
       }
       if (isRenderer) {
-        await verifyRenderer(request, env);
+        const identity = await verifyRenderer(request, env);
         await ensureSchema(env.DB);
+        await env.DB.prepare("INSERT INTO pipeline_state(key,value,updated_at) VALUES('renderer',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at")
+          .bind(JSON.stringify({ runId: identity.run_id || null }), new Date().toISOString()).run();
         if (url.pathname === '/api/renderer/daily' && request.method === 'POST') return json(await runDaily(env));
         if (url.pathname === '/api/renderer/claim' && request.method === 'POST') return json(await claimRender(env));
         const match = url.pathname.match(/^\/api\/renderer\/([^/]+)\/(video|poster|complete|fail)$/);
@@ -166,7 +169,8 @@ export default {
         const row = await env.DB.prepare(`SELECT v.manifest_key, p.research_key, p.script_key
           FROM videos v LEFT JOIN production_runs p ON p.video_id = v.id WHERE v.id = ?`).bind(artifactMatch[1].toLowerCase()).first();
         if (!row) return json({ error: 'Not found' }, 404);
-        const key = row[{ brief: 'manifest_key', research: 'research_key', script: 'script_key' }[artifactMatch[2]]];
+        const key = ['research-input','research-output'].includes(artifactMatch[2]) ? 'jobs/' + artifactMatch[1].toLowerCase() + '/' + artifactMatch[2] + '.json'
+          : row[{ brief: 'manifest_key', research: 'research_key', script: 'script_key' }[artifactMatch[2]]];
         if (!key) return json({ error: 'This artifact is not ready yet.' }, 404);
         const object = await env.ASSETS.get(key);
         if (!object) return json({ error: 'This artifact is not available for this job.' }, 404);

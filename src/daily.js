@@ -35,8 +35,10 @@ export async function dailyStatus(env) {
   const day = localDay();
   const slots = (await env.DB.prepare(`SELECT d.*, v.status, v.error FROM daily_slots d LEFT JOIN videos v ON v.id=d.video_id WHERE d.day=? ORDER BY d.slot`).bind(day).all()).results;
   const backlog = await env.DB.prepare(`SELECT COUNT(*) AS count FROM render_runs WHERE status IN ('pending','leased') OR (status='complete' AND review IS NULL)`).first();
+  const renderer = await env.DB.prepare("SELECT updated_at FROM pipeline_state WHERE key='renderer'").first();
   return { enabled: env.DAILY_ENABLED === 'true', target: 2, timezone: 'America/New_York', day, slots,
     backlog: backlog.count, backlogLimit: 6, rendering: 'GitHub Actions',
+    rendererLastSeenAt: renderer?.updated_at || null,
     approvalEnabled: Boolean(env.OWNER_TOKEN), publishingConnected: false, analyticsConnected: false,
     researchMode: 'Source-backed topic families and saved audience hypotheses. Fresh competitor discovery is not connected.' };
 }

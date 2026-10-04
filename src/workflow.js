@@ -61,7 +61,9 @@ export class ProductionWorkflow extends WorkflowEntrypoint {
 
       const researchKey = await step.do('research-source-pages', STEP_CONFIG, async () => {
         const collected = await collectSources(selectSources(topic, sourceUrls));
-        const research = await generateResearch(env.AI, topic, collected.sources, model, Boolean(creativeBrief));
+        await putJson(env, 'jobs/' + videoId + '/research-input.json', { model, ...collected });
+        const research = await generateResearch(env.AI, topic, collected.sources, model, Boolean(creativeBrief),
+          data => putJson(env, 'jobs/' + videoId + '/research-output.json', { model, data }));
         const key = 'jobs/' + videoId + '/research.json';
         await putJson(env, key, { version: 1, videoId, topic, generatedAt: new Date().toISOString(), model, ...collected, ...research });
         await env.DB.prepare('UPDATE production_runs SET research_key = ?, status = ?, updated_at = ? WHERE video_id = ?')

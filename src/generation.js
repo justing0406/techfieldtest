@@ -116,6 +116,16 @@ export async function modelJson(ai, model, prompt, schema, maxTokens, temperatur
   return value;
 }
 
+export async function modelText(ai, model, prompt, maxTokens = 2000) {
+  const output = await ai.run(model, { messages: [{ role: 'user', content: prompt }], temperature: 0.55, max_tokens: maxTokens,
+    ...(model === MODEL ? { reasoning_effort: 'low' } : {}) });
+  let value = output?.response ?? output?.choices?.[0]?.message?.content ?? output?.output_text;
+  if (value === undefined && Array.isArray(output?.output)) value = output.output.filter(item => item.type === 'message' && item.role === 'assistant')
+    .flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('');
+  if (output?.error || output?.errors || typeof value !== 'string' || !value.trim()) throw new Error('Narration writer did not return usable text.');
+  return value.trim();
+}
+
 export async function generateResearch(ai, topic, sources, model = MODEL, everyday = false, capture = null) {
   const prompt = everyday ? `TASK: RESEARCH
 You verify facts for original funny shorts about everyday situations. Output only the requested JSON.

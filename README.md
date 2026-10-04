@@ -10,7 +10,7 @@ Two daily slots use America/New_York dates and start after 6 AM local time, incl
 
 The daily pipeline rotates source-backed everyday topic families, beginning with rain/plans and empty-fridge cooking. These use the user's preferences and saved audience hypotheses. **Fresh small-creator breakout discovery, platform publishing and performance analytics are not connected.** This milestone automates production, not the complete content business.
 
-The daily pipeline uses `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, which Cloudflare explicitly documents for schema-based JSON mode. `DAILY_AI_MODEL` selects this independently of the legacy custom-script model. Its research prompt extracts everyday facts rather than forcing product comparisons.
+The daily pipeline uses `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, with separate spoken-dialogue writing and scene direction, followed by strict JSON and editorial validation. `DAILY_AI_MODEL` selects this independently of the legacy custom-script model. Its research prompt extracts everyday facts rather than forcing product comparisons.
 
 For each daily topic the Workflow fetches factual sources, verifies exact evidence quotes, creates three competing concepts, selects one for its watch/share reason, writes a structured scene plan, and checks entertainment and factual support with an editor. One revision is allowed. Failed drafts remain failed. Successful plans enter the render queue; they are not labeled finished until their actual MP4 is saved. The older custom-topic form continues to produce research/script drafts only.
 

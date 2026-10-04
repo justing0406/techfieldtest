@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { Miniflare, Log, LogLevel } from 'miniflare';
-import { validatePlan, generateComedy } from '../src/creative.js';
+import { validatePlan, validateDialogue, generateComedy } from '../src/creative.js';
 import { localDay } from '../src/calendar.js';
 import { RESEARCH_QUOTE, RESEARCH_FACTS } from './fixtures.js';
 
@@ -23,18 +23,20 @@ const concepts = [0,1,2].map(i => ({ title: 'Concept ' + i, watchReason: 'Recogn
 test('scene plans gate timing, evidence references, visual variety and executable directions', async () => {
   const good = validatePlan(PLAN, research);
   assert.equal(good.beats.length, 6);
+  assert.throws(() => validateDialogue('Fridge raid\nWeird ingredients', research), /complete spoken lines/);
   for (const alter of [p => p.beats[0].actor = '../execute.py', p => p.beats[2].factIds = ['F999'],
     p => p.beats[0].text = 'I tested the phone.', p => p.beats.forEach(b => b.layout = 'character')]) {
     const copy = structuredClone(PLAN); alter(copy); assert.throws(() => validatePlan(copy, research));
   }
   const calls = [];
   const ai = { async run(model, input) {
-    const task = input.prompt.split('\n')[0]; calls.push(task);
+    const task = (input.prompt || input.messages[0].content).split('\n')[0]; calls.push(task);
+    if (task === 'TASK: COMEDY_DIALOGUE') return { response: PLAN.beats.map(b => b.text + b.factIds.map(id => ' [' + id + ']').join('')).join('\n') };
     return { response: JSON.stringify(task === 'TASK: CONCEPTS' ? { concepts } : task === 'TASK: CONCEPT_EDITOR' ? { chosenIndex: 1, reason: 'Specific friend and visual payoff' } : task === 'TASK: COMEDY_EDITOR' ? { score: 9, supported: true, engaging: true, issues: [] } : PLAN) };
   } };
   const script = await generateComedy(ai, 'Test topic', research, { friend: 'Distracted friend' });
   assert.equal(script.selectedConcept.title, 'Concept 1');
-  assert.deepEqual(calls, ['TASK: CONCEPTS','TASK: CONCEPT_EDITOR','TASK: COMEDY_SCRIPT','TASK: COMEDY_EDITOR']);
+  assert.deepEqual(calls, ['TASK: CONCEPTS','TASK: CONCEPT_EDITOR','TASK: COMEDY_DIALOGUE','TASK: COMEDY_SCRIPT','TASK: COMEDY_EDITOR']);
 });
 
 test('daily boundaries follow New York across daylight-saving transitions', () => {
@@ -68,6 +70,7 @@ async function setup() {
     { name: 'fake-ai', modules: true, compatibilityDate: '2026-10-03', script: `import { WorkerEntrypoint } from 'cloudflare:workers';
       export class FakeAI extends WorkerEntrypoint { async run(model,input) {
         const task=(input.prompt || input.messages.find(m => m.role === 'user').content).split('\\n')[0];
+        if (task==='TASK: COMEDY_DIALOGUE') return {response:${JSON.stringify(PLAN.beats.map(b=>b.text+b.factIds.map(id=>' ['+id+']').join('')).join('\n'))}};
         const data=task==='TASK: RESEARCH' ? {facts:${JSON.stringify(RESEARCH_FACTS)},uncertainties:[],testPlan:[]}
           : task==='TASK: CONCEPTS' ? {concepts:${JSON.stringify(concepts)}}
           : task==='TASK: CONCEPT_EDITOR' ? {chosenIndex:0,reason:'Specific friend'}

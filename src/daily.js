@@ -6,7 +6,7 @@ export { localDay } from './calendar.js';
 export const SEEDS = [
   { id: 'rain', topic: 'The friend who cancels plans after seeing a rain icon: read the forecast timing',
     friend: 'The friend who cancels every outdoor plan', actor: 'cloud',
-    sourceUrls: ['https://www.weather.gov/lmk/pops', 'https://www.weather.gov/forecastpoints'] },
+    sourceUrls: ['https://www.weather.gov/lmk/pops', 'https://www.weather.gov/ffc/pop'] },
   { id: 'fridge', topic: 'The friend who keeps opening the fridge: give a recipe assistant the ingredients you actually have',
     friend: 'The struggling cook waiting for dinner to spawn', actor: 'egg',
     sourceUrls: ['https://www.epa.gov/recycle/preventing-wasted-food-home', 'https://www.fda.gov/food/buy-store-serve-safe-food/what-you-need-know-about-egg-safety'] },

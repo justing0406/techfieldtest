@@ -57,7 +57,7 @@ test('daily chat models receive the full research task as a user message', async
   assert.match(captured.messages[1].content, /Everyday dinner/);
   assert.match(captured.messages[1].content, /SOURCE_DATA:/);
   assert.match(captured.messages[0].content, /"minItems":2/);
-  assert.equal(captured.response_format.type, 'json_object');
+  assert.equal(captured.response_format, undefined);
 });
 
 test('model output supports native, chat and Responses formats and editor failures are enforced', async () => {

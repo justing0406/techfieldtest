@@ -77,10 +77,11 @@ export class ProductionWorkflow extends WorkflowEntrypoint {
         if (!object) throw new Error('Saved research is unavailable.');
         const research = await object.json();
         const draft = creativeBrief ? await generateComedy(env.AI, topic, research, creativeBrief, model,
-          journal => putJson(env, 'jobs/' + videoId + '/creative-output.json', { model, journal }))
+          journal => putJson(env, 'jobs/' + videoId + '/creative-output.json', { model, dialogueModel: MODEL, journal }))
           : await generateScript(env.AI, topic, research, model);
         const key = 'jobs/' + videoId + '/script.json';
-        await putJson(env, key, { version: 1, videoId, generatedAt: new Date().toISOString(), model, ...draft,
+        await putJson(env, key, { version: 1, videoId, generatedAt: new Date().toISOString(), model,
+          ...(creativeBrief ? { dialogueModel: MODEL } : {}), ...draft,
           facts: research.facts, uncertainties: research.uncertainties, testPlan: research.testPlan, sourceFailures: research.failures,
           sources: research.sources.map(({ id, url, title, retrievedAt, sha256 }) => ({ id, url, title, retrievedAt, sha256 })) });
         await env.DB.prepare('UPDATE production_runs SET script_key = ?, status = ?, updated_at = ? WHERE video_id = ?')

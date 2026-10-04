@@ -9,7 +9,7 @@
     { "binding": "PRODUCTION", "name": "techfieldtest-production", "class_name": "ProductionWorkflow" }
   ],
   "vars": {
-    "MAX_RUNS_PER_DAY": "14", "DAILY_ENABLED": "true",
+    "MAX_RUNS_PER_DAY": "10", "DAILY_ENABLED": "true",
     "DAILY_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     "RENDER_REPOSITORY": "justing0406/techfieldtest", "RENDER_REPOSITORY_ID": "1403649581", "RENDER_OWNER_ID": "253958327"
   },

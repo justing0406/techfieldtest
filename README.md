@@ -10,7 +10,7 @@ Two daily slots use America/New_York dates and start after 6 AM local time, incl
 
 The daily pipeline rotates source-backed everyday topic families, beginning with rain/plans and empty-fridge cooking. These use the user's preferences and saved audience hypotheses. **Fresh small-creator breakout discovery, platform publishing and performance analytics are not connected.** This milestone automates production, not the complete content business.
 
-The daily pipeline uses `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, with separate spoken-dialogue writing and scene direction, followed by strict JSON and editorial validation. `DAILY_AI_MODEL` selects this independently of the legacy custom-script model. Its research prompt extracts everyday facts rather than forcing product comparisons.
+Daily research and scene direction use `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. A separate `@cf/openai/gpt-oss-120b` writer produces the complete spoken dialogue as text; direction preserves those lines verbatim. Strict validation requires 65–105 spoken words and checks the finished scene JSON before editorial review. `DAILY_AI_MODEL` selects the research/director model independently of the dialogue writer and legacy custom-script model. The research prompt extracts everyday facts rather than forcing product comparisons. Research inputs, raw replies and creative drafts are saved for diagnosis when a gate fails.
 
 For each daily topic the Workflow fetches factual sources, verifies exact evidence quotes, creates three competing concepts, selects one for its watch/share reason, writes a structured scene plan, and checks entertainment and factual support with an editor. One revision is allowed. Failed drafts remain failed. Successful plans enter the render queue; they are not labeled finished until their actual MP4 is saved. The older custom-topic form continues to produce research/script drafts only.
 
@@ -73,7 +73,7 @@ Your existing GitHub -> Cloudflare Workers Builds integration can keep its `npx 
 
 The configuration deliberately omits resource IDs. Wrangler's [automatic resource provisioning](https://developers.cloudflare.com/changelog/post/2025-10-24-automatic-resource-provisioning/) creates or links the D1 and R2 bindings during deployment and reuses the linked resources on subsequent deploys. It may update the build's local config with IDs; committing those IDs is not required to preserve the bindings.
 
-The additive schemas in `migrations/0001_jobs.sql` and `0002_production.sql` are bundled with the Worker and applied with `CREATE ... IF NOT EXISTS` on first storage use. Existing jobs are preserved. This deployment works with the existing deploy command without a separate migration step. Future non-additive schema changes must use versioned migrations.
+The additive schemas in `migrations/0001_jobs.sql`, `0002_production.sql` and `0003_daily.sql` are bundled with the Worker and applied with `CREATE ... IF NOT EXISTS` on first storage use. Existing jobs are preserved. This deployment works with the existing deploy command without a separate migration step. Future non-additive schema changes must use versioned migrations.
 
 After the build succeeds, open `/api/health`. Expect HTTP 200 and:
 

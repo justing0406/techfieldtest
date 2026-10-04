@@ -1,11 +1,6 @@
 name: Daily video production
 on:
-  schedule:
-    - cron: '37 * * * *'
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ['src/**', 'renderer/**', 'migrations/**', 'wrangler.jsonc', '.github/workflows/daily-production.yml']
 permissions:
   contents: read
   id-token: write

@@ -53,10 +53,11 @@ test('daily chat models receive the full research task as a user message', async
   } };
   await generateResearch(ai, 'Everyday dinner', sources, '@cf/meta/llama-3.3-70b-instruct-fp8-fast', true);
   assert.equal(captured.prompt, undefined);
-  assert.equal(captured.messages[0].role, 'user');
-  assert.match(captured.messages[0].content, /Everyday dinner/);
-  assert.match(captured.messages[0].content, /SOURCE_DATA:/);
-  assert.equal(captured.response_format.json_schema.properties.facts.minItems, 2);
+  assert.equal(captured.messages[1].role, 'user');
+  assert.match(captured.messages[1].content, /Everyday dinner/);
+  assert.match(captured.messages[1].content, /SOURCE_DATA:/);
+  assert.match(captured.messages[0].content, /"minItems":2/);
+  assert.equal(captured.response_format.type, 'json_object');
 });
 
 test('model output supports native, chat and Responses formats and editor failures are enforced', async () => {

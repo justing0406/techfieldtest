@@ -98,9 +98,12 @@ export function validateScript(data, research) {
 }
 
 export async function modelJson(ai, model, prompt, schema, maxTokens, temperature = 0.15) {
-  const input = model === MODEL ? { prompt } : { messages: [{ role: 'user', content: prompt }] };
+  const input = model === MODEL ? { prompt } : { messages: [
+    { role: 'system', content: 'Complete the user task. Return a populated JSON object matching this schema: ' + JSON.stringify(schema) },
+    { role: 'user', content: prompt },
+  ] };
   const output = await ai.run(model, { ...input, temperature, max_tokens: maxTokens,
-    response_format: { type: 'json_schema', json_schema: schema } });
+    response_format: model === MODEL ? { type: 'json_schema', json_schema: schema } : { type: 'json_object' } });
   if (!output || output.error || output.errors) throw new Error('Generation service did not return a usable answer.');
   let value = output.response ?? output.choices?.[0]?.message?.content ?? output.output_text;
   if (value === undefined && Array.isArray(output.output)) value = output.output.filter(item => item.type === 'message' && item.role === 'assistant')

@@ -76,7 +76,8 @@ export class ProductionWorkflow extends WorkflowEntrypoint {
         const object = await env.ASSETS.get(researchKey);
         if (!object) throw new Error('Saved research is unavailable.');
         const research = await object.json();
-        const draft = creativeBrief ? await generateComedy(env.AI, topic, research, creativeBrief, model)
+        const draft = creativeBrief ? await generateComedy(env.AI, topic, research, creativeBrief, model,
+          journal => putJson(env, 'jobs/' + videoId + '/creative-output.json', { model, journal }))
           : await generateScript(env.AI, topic, research, model);
         const key = 'jobs/' + videoId + '/script.json';
         await putJson(env, key, { version: 1, videoId, generatedAt: new Date().toISOString(), model, ...draft,

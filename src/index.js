@@ -71,7 +71,7 @@ export default {
 
     const isList = url.pathname === '/api/videos' && request.method === 'GET';
     const isCreate = url.pathname === '/api/generate' && request.method === 'POST';
-    const artifactMatch = url.pathname.match(/^\/api\/videos\/([^/]+)\/(brief|research|script|research-input|research-output)$/);
+    const artifactMatch = url.pathname.match(/^\/api\/videos\/([^/]+)\/(brief|research|script|research-input|research-output|creative-output)$/);
     const isArtifact = artifactMatch && request.method === 'GET';
     const startMatch = url.pathname.match(/^\/api\/videos\/([^/]+)\/start$/);
     const isStart = startMatch && request.method === 'POST';
@@ -169,7 +169,7 @@ export default {
         const row = await env.DB.prepare(`SELECT v.manifest_key, p.research_key, p.script_key
           FROM videos v LEFT JOIN production_runs p ON p.video_id = v.id WHERE v.id = ?`).bind(artifactMatch[1].toLowerCase()).first();
         if (!row) return json({ error: 'Not found' }, 404);
-        const key = ['research-input','research-output'].includes(artifactMatch[2]) ? 'jobs/' + artifactMatch[1].toLowerCase() + '/' + artifactMatch[2] + '.json'
+        const key = ['research-input','research-output','creative-output'].includes(artifactMatch[2]) ? 'jobs/' + artifactMatch[1].toLowerCase() + '/' + artifactMatch[2] + '.json'
           : row[{ brief: 'manifest_key', research: 'research_key', script: 'script_key' }[artifactMatch[2]]];
         if (!key) return json({ error: 'This artifact is not ready yet.' }, 404);
         const object = await env.ASSETS.get(key);

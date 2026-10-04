@@ -2,7 +2,7 @@ import { dashboardHtml } from './dashboard.js';
 import { createVideo, DEFAULT_TOPIC, ensureSchema, listVideos, UUID } from './jobs.js';
 import { selectSources, refreshedSources } from './sources.js';
 import { startProduction } from './workflow.js';
-import { dailyStatus, runDaily } from './daily.js';
+import { dailyStatus, runDaily, SEEDS } from './daily.js';
 import { verifyRenderer, requireOwner } from './render-auth.js';
 import { claimRender, uploadRender, finishRender, failRender, serveMedia } from './render-queue.js';
 export { ProductionWorkflow } from './workflow.js';
@@ -144,7 +144,7 @@ export default {
         const id = request.headers.get('Idempotency-Key') || crypto.randomUUID();
         if (!UUID.test(id)) return json({ error: 'Idempotency-Key must be a version 4 UUID.' }, 400);
         let sources;
-        try { sources = refreshedSources(parent.topic, brief.sourceUrls); }
+        try { sources = SEEDS.find(seed => seed.id === brief.creativeBrief?.id)?.sourceUrls || refreshedSources(parent.topic, brief.sourceUrls); }
         catch (error) { return json({ error: error.message }, 400); }
         const review = await env.DB.prepare('SELECT review_note FROM render_runs WHERE video_id=?').bind(parentId).first();
         const creativeBrief = brief.creativeBrief ? { ...brief.creativeBrief, revisionFeedback: review?.review_note || parent.error || '', previousDraftId: parentId } : null;

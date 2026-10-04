@@ -136,5 +136,26 @@ test('two daily jobs deduplicate, render leases recover, and actual assets gate 
     const row = await db.prepare('SELECT status FROM videos WHERE id=?').bind(first.videoId).first(); assert.equal(row.status, 'approved');
     await post(mf, '/api/renderer/' + second.videoId + '/fail', { leaseId: second.leaseId, error: 'Expected test failure' }, auth);
     assert.equal((await (await post(mf, '/api/renderer/claim', {}, auth)).json()).job.videoId, second.videoId);
+    await post(mf, '/api/videos/' + first.videoId + '/review', { decision: 'rejected', note: 'Make the ending funnier.' }, 'test-owner');
+    const revision = await (await post(mf, '/api/videos/' + first.videoId + '/regenerate')).json();
+    assert.equal(revision.parentVideoId, first.videoId);
+    const brief = await (await mf.dispatchFetch('https://example.com' + revision.video.briefUrl)).json();
+    assert.equal(brief.creativeBrief.revisionFeedback, 'Make the ending funnier.');
+    const daily = await (await mf.dispatchFetch('https://example.com/api/daily')).json();
+    assert.ok(daily.slots.some(s => s.video_id === revision.video.id));
+    assert.equal(daily.slots.length, 2);
+  } finally { await mf.dispose(); }
+});
+
+test('a full three-day buffer blocks new daily reservations', async () => {
+  const { mf } = await setup();
+  try {
+    await mf.dispatchFetch('https://example.com/api/health');
+    const db = await mf.getD1Database('DB', 'app');
+    for (let i = 0; i < 6; i++) await db.prepare('INSERT INTO daily_slots(day,slot,video_id,seed_id,created_at) VALUES(?,1,?,?,?)')
+      .bind('2000-01-0' + (i + 1), crypto.randomUUID(), 'rain', '2000-01-01T00:00:00Z').run();
+    const result = await (await post(mf, '/api/daily/run')).json();
+    assert.equal(result.results.filter(r => r.skipped).length, 2);
+    assert.equal((await (await mf.dispatchFetch('https://example.com/api/daily')).json()).slots.length, 0);
   } finally { await mf.dispose(); }
 });

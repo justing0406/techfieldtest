@@ -80,6 +80,10 @@ export async function runDaily(env, date = new Date(), force = false) {
       return { topic: row.topic, title: draft?.title || null, concept: draft?.selectedConcept || null };
     }));
     const existing = await env.DB.prepare('SELECT * FROM videos WHERE id=?').bind(reserved.video_id).first();
+    if (existing && !['creating','queued'].includes(existing.status)) {
+      results.push({ slot, videoId: reserved.video_id, started: false, message: 'Daily draft already processing or finished.' });
+      continue;
+    }
     // Repair a crash after the slot reservation or before brief persistence. Workflow
     // start failures remain queued and are retried without reserving a third job.
     if (existing?.status === 'creating') {

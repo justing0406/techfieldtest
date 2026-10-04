@@ -147,6 +147,9 @@ export default {
         const creativeBrief = brief.creativeBrief ? { ...brief.creativeBrief, revisionFeedback: review?.review_note || parent.error || '', previousDraftId: parentId } : null;
         const result = await createVideo(env, id.toLowerCase(), parent.topic, sources, parentId, creativeBrief);
         if (result.error) return json({ error: result.error }, result.code);
+        if (creativeBrief?.dailyDay) {
+          await env.DB.prepare('UPDATE daily_slots SET video_id=? WHERE video_id=? AND day=?').bind(result.video.id, parentId, creativeBrief.dailyDay).run();
+        }
         let pipeline;
         try { pipeline = await startProduction(env, result.video.id); }
         catch (error) { pipeline = { started: false, error: error.message, code: error.code || 503 }; }

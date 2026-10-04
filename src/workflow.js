@@ -57,12 +57,13 @@ export class ProductionWorkflow extends WorkflowEntrypoint {
         return { topic: row.topic, creativeBrief: brief ? (await brief.json()).creativeBrief : null };
       });
       const { topic, creativeBrief } = typeof loaded === 'string' ? { topic: loaded, creativeBrief: null } : loaded;
+      const model = creativeBrief ? env.DAILY_AI_MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast' : env.AI_MODEL || MODEL;
 
       const researchKey = await step.do('research-source-pages', STEP_CONFIG, async () => {
         const collected = await collectSources(selectSources(topic, sourceUrls));
-        const research = await generateResearch(env.AI, topic, collected.sources, env.AI_MODEL || MODEL, Boolean(creativeBrief));
+        const research = await generateResearch(env.AI, topic, collected.sources, model, Boolean(creativeBrief));
         const key = 'jobs/' + videoId + '/research.json';
-        await putJson(env, key, { version: 1, videoId, topic, generatedAt: new Date().toISOString(), model: env.AI_MODEL || MODEL, ...collected, ...research });
+        await putJson(env, key, { version: 1, videoId, topic, generatedAt: new Date().toISOString(), model, ...collected, ...research });
         await env.DB.prepare('UPDATE production_runs SET research_key = ?, status = ?, updated_at = ? WHERE video_id = ?')
           .bind(key, 'research_complete', new Date().toISOString(), videoId).run();
         return key;
@@ -73,10 +74,10 @@ export class ProductionWorkflow extends WorkflowEntrypoint {
         const object = await env.ASSETS.get(researchKey);
         if (!object) throw new Error('Saved research is unavailable.');
         const research = await object.json();
-        const draft = creativeBrief ? await generateComedy(env.AI, topic, research, creativeBrief, env.AI_MODEL || MODEL)
-          : await generateScript(env.AI, topic, research, env.AI_MODEL || MODEL);
+        const draft = creativeBrief ? await generateComedy(env.AI, topic, research, creativeBrief, model)
+          : await generateScript(env.AI, topic, research, model);
         const key = 'jobs/' + videoId + '/script.json';
-        await putJson(env, key, { version: 1, videoId, generatedAt: new Date().toISOString(), model: env.AI_MODEL || MODEL, ...draft,
+        await putJson(env, key, { version: 1, videoId, generatedAt: new Date().toISOString(), model, ...draft,
           facts: research.facts, uncertainties: research.uncertainties, testPlan: research.testPlan, sourceFailures: research.failures,
           sources: research.sources.map(({ id, url, title, retrievedAt, sha256 }) => ({ id, url, title, retrievedAt, sha256 })) });
         await env.DB.prepare('UPDATE production_runs SET script_key = ?, status = ?, updated_at = ? WHERE video_id = ?')

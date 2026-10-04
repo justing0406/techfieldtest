@@ -12,19 +12,20 @@ import urllib.request
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parent
+USER_AGENT='TechFieldTest/0.5.0'
 MODEL_FILES={
  'kokoro-v1.0.int8.onnx':'ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c',
  'voices-v1.0.bin':'bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d'}
 
 def identity():
     url=os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'];separator='&' if '?' in url else '?'
-    request=urllib.request.Request(url+separator+'audience=techfieldtest-render',headers={'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+    request=urllib.request.Request(url+separator+'audience=techfieldtest-render',headers={'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN'],'User-Agent':USER_AGENT})
     with urllib.request.urlopen(request,timeout=30) as response:return json.load(response)['value']
 
 def api(path,data=None,method='POST',file=None,lease=None):
     origin=os.environ['WORKER_URL'].rstrip('/')
     if urllib.parse.urlsplit(origin).scheme!='https':raise ValueError('WORKER_URL must use HTTPS')
-    headers={'Authorization':'Bearer '+identity()}
+    headers={'Authorization':'Bearer '+identity(),'User-Agent':USER_AGENT}
     if file:
         payload=file.read_bytes();headers['Content-Type']='video/mp4' if file.suffix=='.mp4' else 'image/jpeg'
         headers['Content-Length']=str(len(payload));headers['X-Render-Lease']=lease
@@ -48,7 +49,8 @@ def claim(work,initial=False):
             job=api('/api/renderer/claim')['job']
             if job or not initial or time.monotonic()>deadline:break
             time.sleep(15)
-        except RuntimeError:
+        except RuntimeError as error:
+            print(str(error),flush=True)
             if not initial or time.monotonic()>deadline:raise
             time.sleep(15)
     (work/'job.json').write_text(json.dumps(job,indent=2))
@@ -64,7 +66,11 @@ def models(directory):
         path=directory/filename
         if not path.exists():
             url='https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/'+filename
-            temporary=path.with_suffix('.download');urllib.request.urlretrieve(url,temporary);temporary.replace(path)
+            temporary=path.with_suffix('.download')
+            request=urllib.request.Request(url,headers={'User-Agent':USER_AGENT})
+            with urllib.request.urlopen(request,timeout=120) as response,temporary.open('wb') as output:
+                while chunk:=response.read(1024*1024):output.write(chunk)
+            temporary.replace(path)
         if hashlib.sha256(path.read_bytes()).hexdigest()!=expected:raise ValueError('Voice model checksum mismatch: '+filename)
 
 def produce(job,directory,modeldir):

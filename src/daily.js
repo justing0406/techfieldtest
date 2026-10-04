@@ -18,16 +18,16 @@ export const SEEDS = [
     sourceUrls: ['https://support.apple.com/en-us/102432', 'https://www.apple.com/batteries/maximizing-performance/'] },
   { id: 'leftovers', topic: 'The friend treating leftovers like an archaeological dig: label dates and store food promptly',
     friend: 'The friend with mysterious containers in the fridge', actor: 'cheddar',
-    sourceUrls: ['https://www.fsis.usda.gov/food-safety/safe-food-handling-and-preparation/food-safety-basics/leftovers-and-food-safety', 'https://www.fda.gov/food/buy-store-serve-safe-food/are-you-storing-food-safely'] },
+    sourceUrls: ['https://www.epa.gov/recycle/preventing-wasted-food-home', 'https://www.fda.gov/consumers/consumer-updates/are-you-storing-food-safely'] },
   { id: 'storage', topic: 'The friend deleting everything because their phone is full: inspect the storage breakdown first',
     friend: 'The friend who has to delete something before taking a photo', actor: 'phone',
     sourceUrls: ['https://support.apple.com/en-us/108429', 'https://support.apple.com/en-us/102670'] },
   { id: 'passwords', topic: 'The friend using the same password everywhere: a password manager remembers unique passwords',
     friend: 'The friend whose password is also every other password', actor: 'duck',
-    sourceUrls: ['https://www.cisa.gov/secure-our-world/use-strong-passwords', 'https://www.cisa.gov/secure-our-world/turn-mfa'] },
+    sourceUrls: ['https://support.apple.com/en-us/120758', 'https://support.apple.com/en-us/102660'] },
   { id: 'mealplan', topic: 'The friend buying groceries without a dinner plan: check the cupboard before making the list',
     friend: 'The friend with groceries but somehow no meals', actor: 'tortilla',
-    sourceUrls: ['https://www.epa.gov/recycle/preventing-wasted-food-home', 'https://www.fda.gov/food/buy-store-serve-safe-food/are-you-storing-food-safely'] },
+    sourceUrls: ['https://www.epa.gov/recycle/preventing-wasted-food-home', 'https://www.fda.gov/consumers/consumer-updates/are-you-storing-food-safely'] },
 ];
 
 export async function dailyStatus(env) {

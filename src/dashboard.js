@@ -56,6 +56,9 @@ export const dashboardHtml = `<!doctype html>
     .draft-preview h4 { font-size:16px; margin:10px 0; }
     .draft-preview li { margin-bottom:16px; }
     .draft-preview a { margin-right:8px; }
+    .video-preview { display:block; width:230px; max-width:100%; aspect-ratio:9/16; border-radius:16px; background:#000; margin-top:16px; }
+    .daily-controls { padding:22px; margin-bottom:24px; }
+    .daily-controls p { color:var(--muted); font-size:13px; line-height:1.6; }
     .secondary { border:1px solid var(--line); background:#14253c; color:#7dd3fc; padding:8px 12px; border-radius:8px; cursor:pointer; display:block; margin-top:10px; }
     @media(max-width:520px) { .job { flex-direction:column; } .job-side { text-align:left; } }
     .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 30px 0 64px; position: relative; z-index: 1; }
@@ -109,15 +112,15 @@ export const dashboardHtml = `<!doctype html>
 
     <section class="hero">
       <article class="card hero-main">
-        <p class="eyebrow">V4 · Research + editorial review</p>
-        <h1>Test tech. Make the video. Learn what works.</h1>
-        <p class="hero-copy">Choose a topic. We read source pages, collect evidence and draft a 30–45 second script for your review. Voice, rendering and publishing come next.</p>
+        <p class="eyebrow">V5 · Daily video production</p>
+        <h1>Make something worth sending.</h1>
+        <p class="hero-copy">Two daily drafts built around relatable situations, useful payoffs and weird little jokes. Preview the finished videos here before approving them.</p>
         <form id="generateForm">
           <label class="topic-label" for="topic">What should we test?</label>
           <input class="topic-input" id="topic" maxlength="240" required value="Which free meeting note taker fits your meetings?" />
           <label class="topic-label" for="sourceUrls">Source pages (optional for meeting tools; 2–5 URLs for other topics)</label>
           <textarea class="topic-input" id="sourceUrls" rows="2" maxlength="3000" placeholder="One product or documentation URL per line"></textarea>
-          <button class="primary" id="generateBtn" type="submit">+ Generate video job</button>
+          <button class="primary" id="generateBtn" type="submit">+ Research a custom topic</button>
         </form>
         <div class="notice" id="notice" role="status" aria-live="polite"></div>
       </article>
@@ -134,15 +137,24 @@ export const dashboardHtml = `<!doctype html>
             <div class="step"><span>6</span> Publish + measure</div>
           </div>
         </div>
-        <div class="mini-note">Nothing auto-publishes in V1. Approval stays human until the content engine proves reliable.</div>
+        <div class="mini-note">Publishing and platform analytics are not connected yet. Fresh competitor discovery comes next.</div>
       </aside>
     </section>
 
+    <section class="card daily-controls">
+      <h2>Daily production</h2>
+      <p id="dailyStatus">Loading today's queue...</p>
+      <button class="primary" id="dailyRun" type="button">Make today's two drafts</button>
+      <p>Automatic production starts after 6 AM New York time. A three-day review buffer keeps the queue manageable.</p>
+      <label class="topic-label" for="ownerKey">Owner approval key</label>
+      <input class="topic-input" type="password" autocomplete="off" id="ownerKey" placeholder="Enter your configured key to approve finished videos" />
+      <p id="approvalStatus">Loading approval settings...</p>
+    </section>
     <section class="metrics">
       <article class="card metric"><div class="metric-label">Jobs today</div><div class="metric-value" id="videosToday">0</div><div class="metric-sub">America/New_York</div></article>
-      <article class="card metric"><div class="metric-label">Scripts ready for review</div><div class="metric-value" id="awaitingApproval">0</div><div class="metric-sub">Human checkpoint enabled</div></article>
+      <article class="card metric"><div class="metric-label">Drafts ready for review</div><div class="metric-value" id="awaitingApproval">0</div><div class="metric-sub">Scripts and finished videos</div></article>
       <article class="card metric"><div class="metric-label">Published</div><div class="metric-value" id="published">0</div><div class="metric-sub">Across all platforms</div></article>
-      <article class="card metric"><div class="metric-label">Revenue</div><div class="metric-value">$0</div><div class="metric-sub">Revenue tracking comes later</div></article>
+      <article class="card metric"><div class="metric-label">Revenue</div><div class="metric-value">—</div><div class="metric-sub">Tracking not connected</div></article>
     </section>
 
     <section class="card queue">
@@ -150,7 +162,7 @@ export const dashboardHtml = `<!doctype html>
       <div id="queue" aria-live="polite"><div class="empty"><p>Loading your jobs…</p></div></div>
     </section>
 
-    <footer><span>TechFieldTest · Real tech. Real tests. Real answers.</span><span id="apiStatus">Checking API…</span></footer>
+    <footer><span>TechFieldTest · Relatable stories. Useful payoffs.</span><span id="apiStatus">Checking API…</span></footer>
   </main>
 
   <script>
@@ -165,6 +177,10 @@ export const dashboardHtml = `<!doctype html>
     const draftCache = new Map();
     const regenerateIds = new Map();
     let refreshing = false;
+    const playingVideos = new Set();
+    const videoPositions = new Map();
+    const reviewFeedback = new Map();
+    let approvalEnabled = false;
     const labels = { creating: "Saving", queued: "Waiting for research", researching: "Researching sources", scripting: "Writing script", rendering: "Rendering", awaiting_approval: "Script ready for review", approved: "Approved", published: "Published", failed: "Needs attention" };
 
     function showDraft(parent, draft) {
@@ -172,6 +188,7 @@ export const dashboardHtml = `<!doctype html>
       const title = document.createElement("h4"); title.textContent = draft.title;
       const note = document.createElement("p"); note.textContent = draft.reviewNote + " Estimated duration: " + draft.durationSeconds + " seconds.";
       parent.append(title, note);
+      if (draft.selectedConcept) { const why = document.createElement("p"); why.textContent = "Why watch: " + draft.selectedConcept.watchReason + " · Why send: " + draft.selectedConcept.shareReason; parent.append(why); }
       const scenes = document.createElement("ol");
       for (const scene of draft.scenes) {
         const item = document.createElement("li");
@@ -188,11 +205,18 @@ export const dashboardHtml = `<!doctype html>
       }
       parent.append(scenes);
       const checks = document.createElement("p"); checks.textContent = "Needs checking: " + draft.uncertainties.join(" · "); parent.append(checks);
-      const plan = document.createElement("p"); plan.textContent = "Future hands-on test: " + draft.testPlan.join(" · "); parent.append(plan);
+      if (!draft.plan) { const plan = document.createElement("p"); plan.textContent = "Future hands-on test: " + draft.testPlan.join(" · "); parent.append(plan); }
       if (draft.sourceFailures.length) { const failures = document.createElement("p"); failures.textContent = draft.sourceFailures.length + " source page(s) could not be read. Check the research file for details."; parent.append(failures); }
     }
 
     async function refreshQueue() {
+      if (playingVideos.size || ["TEXTAREA","INPUT"].includes(document.activeElement?.tagName)) return;
+      const dailyResponse = await fetch("/api/daily");
+      const daily = await dailyResponse.json();
+      if (!dailyResponse.ok) throw new Error(daily.error || "Daily queue unavailable");
+      approvalEnabled = daily.approvalEnabled;
+      document.getElementById("dailyStatus").textContent = (daily.enabled ? "Daily production on" : "Daily production paused") + " · " + daily.slots.length + "/2 jobs reserved today · " + daily.backlog + "/6 videos in the render/review buffer";
+      document.getElementById("approvalStatus").textContent = approvalEnabled ? "Approval saves your decision; publishing is not connected." : "Finished previews work now. Approval needs an owner key configured once.";
       const response = await fetch("/api/videos");
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not load jobs");
@@ -213,6 +237,32 @@ export const dashboardHtml = `<!doctype html>
         const title = document.createElement("h3"); title.textContent = video.topic;
         const meta = document.createElement("p"); meta.textContent = new Date(video.createdAt).toLocaleString() + " · " + video.id.slice(0, 8);
         main.append(title, meta);
+        if (video.videoUrl) {
+          const player = document.createElement("video"); player.className = "video-preview"; player.controls = true; player.preload = "none"; player.playsInline = true; player.src = video.videoUrl; player.poster = video.posterUrl;
+          player.addEventListener("play", () => playingVideos.add(video.id));
+          player.addEventListener("timeupdate", () => videoPositions.set(video.id, player.currentTime));
+          player.addEventListener("loadedmetadata", () => { if (videoPositions.has(video.id)) player.currentTime = videoPositions.get(video.id); });
+          for (const event of ["pause", "ended"]) player.addEventListener(event, () => playingVideos.delete(video.id));
+          main.append(player);
+          const download = document.createElement("a"); download.href = video.videoUrl; download.textContent = "Download MP4"; download.download = "techfieldtest-" + video.id.slice(0, 8) + ".mp4"; main.append(download);
+          if (!video.review) {
+            const feedback = document.createElement("textarea"); feedback.className = "topic-input"; feedback.maxLength = 500; feedback.rows = 2; feedback.placeholder = "What should improve?";
+            feedback.value = reviewFeedback.get(video.id) || ""; feedback.addEventListener("input", () => reviewFeedback.set(video.id, feedback.value));
+            main.append(feedback);
+            for (const decision of ["approved", "rejected"]) {
+              const button = document.createElement("button"); button.className = "secondary"; button.textContent = decision === "approved" ? "Approve finished video" : "Reject + save feedback"; button.disabled = !approvalEnabled;
+              button.addEventListener("click", async () => {
+                button.disabled = true;
+                try {
+                  const response = await fetch("/api/videos/" + video.id + "/review", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + document.getElementById("ownerKey").value }, body: JSON.stringify({ decision, note: feedback.value }) });
+                  const result = await response.json(); if (!response.ok) throw new Error(result.error);
+                  notice.textContent = decision === "approved" ? "Video approved. It has not been published." : "Feedback saved. Regenerate to create another draft."; notice.classList.add("show"); await refreshQueue();
+                } catch (error) { notice.textContent = error.message; notice.classList.add("show"); button.disabled = false; }
+              }); main.append(button);
+            }
+          }
+          if (video.reviewNote) { const feedback = document.createElement("p"); feedback.textContent = "Review: " + video.reviewNote; main.append(feedback); }
+        }
         if (video.error) { const error = document.createElement("div"); error.className = "job-error"; error.textContent = video.error; main.append(error); }
         if (video.scriptUrl) {
           const preview = document.createElement("div"); preview.className = "draft-preview"; preview.hidden = !openDrafts.has(video.id);
@@ -229,7 +279,7 @@ export const dashboardHtml = `<!doctype html>
           });
           main.append(button, preview);
         }
-        if (video.scriptUrl || video.status === "failed") {
+        if (["awaiting_approval","failed"].includes(video.status)) {
           const regenerate = document.createElement("button"); regenerate.className = "secondary"; regenerate.textContent = "Regenerate script";
           regenerate.addEventListener("click", async () => {
             if (!regenerateIds.has(video.id)) regenerateIds.set(video.id, crypto.randomUUID());
@@ -242,7 +292,7 @@ export const dashboardHtml = `<!doctype html>
           }); main.append(regenerate);
         }
         const side = document.createElement("div"); side.className = "job-side";
-        const status = document.createElement("span"); status.className = "pill"; status.textContent = labels[video.status] || video.status;
+        const status = document.createElement("span"); status.className = "pill"; status.textContent = video.status === "awaiting_approval" && video.videoUrl ? "Video ready for review" : video.status === "rendering" && video.renderStatus === "pending" ? "Waiting for render worker" : labels[video.status] || video.status;
         side.append(status);
         if (video.status === "queued") {
           const start = document.createElement("button"); start.className = "secondary"; start.textContent = "Start research";
@@ -301,10 +351,19 @@ export const dashboardHtml = `<!doctype html>
         notice.classList.add("show");
       } finally {
         generateBtn.disabled = false;
-        generateBtn.textContent = "+ Generate video job";
+        generateBtn.textContent = "+ Research a custom topic";
       }
     });
 
+    document.getElementById("dailyRun").addEventListener("click", async event => {
+      event.target.disabled = true;
+      try {
+        const response = await fetch("/api/daily/run", { method: "POST" }); const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+        notice.textContent = "Today's queue checked. Existing daily jobs are reused; new drafts will appear here."; notice.classList.add("show"); await refreshQueue();
+      } catch (error) { notice.textContent = error.message; notice.classList.add("show"); }
+      finally { event.target.disabled = false; }
+    });
     boot();
     setInterval(async () => {
       if (document.hidden || refreshing || generateBtn.disabled) return;

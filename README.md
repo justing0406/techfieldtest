@@ -4,7 +4,37 @@ Control room for the TechFieldTest content pipeline: TikTok, Instagram Reels and
 
 A [complete local production prototype](production/README.md) now produces an original 1080x1920 MP4 with narration, animated test visuals, captions and sound. Its first experiment demonstrates why a black rectangle can leave PDF text extractable. It includes a research brief and a verified synthetic test. This renderer is not yet connected to the deployed dashboard or platform publishing.
 
-## V0.4: focused scripts and editorial review
+## V0.5: daily finished-video drafts
+
+Two daily slots use America/New_York dates and start after 6 AM local time, including daylight-saving changes. **Make today's two drafts** starts the same slots immediately. A slot always retains the same job ID, so retries and overlapping cron/runner calls do not create extra originals. Failed jobs stay visible instead of being silently replaced. A six-video buffer pauses new daily reservations until finished videos are reviewed.
+
+The daily pipeline rotates source-backed everyday topic families, beginning with rain/plans and empty-fridge cooking. These use the user's preferences and saved audience hypotheses. **Fresh small-creator breakout discovery, platform publishing and performance analytics are not connected.** This milestone automates production, not the complete content business.
+
+For each daily topic the Workflow fetches factual sources, verifies exact evidence quotes, creates three competing concepts, selects one for its watch/share reason, writes a structured scene plan, and checks entertainment and factual support with an editor. One revision is allowed. Failed drafts remain failed. Successful plans enter the render queue; they are not labeled finished until their actual MP4 is saved. The older custom-topic form continues to produce research/script drafts only.
+
+The renderer uses six original cartoon layouts, seven characters/props, four synthetic voices, animated expressions, burned-in captions, original synthesized music and scene sound effects. Models produce bounded scene JSON; they cannot supply executable render code. Recurring production assets support distinct situations and punchlines.
+
+### Rendering without another hosted server
+
+[Daily video production](.github/workflows/daily-production.yml) runs in GitHub Actions hourly, on relevant pushes to main, and manually. It installs rendering dependencies only when there is work. It claims up to two plans, synthesizes speech, renders 1080×1920/30fps H.264/AAC MP4s, verifies full decoding, measured duration, caption bounds, loudness and peak levels, then uploads the MP4, poster and technical report to R2. MP4 streaming supports byte ranges for dashboard playback. Captions use measured speech-beat durations and estimated phrase boundaries, not forced word alignment.
+
+The runner authenticates with short-lived GitHub OIDC tokens. The Worker checks the issuer, signature, audience, expiry, immutable repository/owner IDs, main branch, exact workflow path and allowed event. No render password or Cloudflare API key is stored in GitHub. A 45-minute claim lease prevents concurrent workers from finishing the same job. Expired leases and failed runs retry up to three times. Completion verifies that the report's SHA-256 matches the uploaded MP4 and is idempotent if the response is lost.
+
+GitHub identity reference: https://docs.github.com/en/actions/concepts/security/openid-connect
+
+Worker cron reference: https://developers.cloudflare.com/workers/configuration/cron-triggers/
+
+The verified existing Worker URL is `https://techfieldtest.justing0406.workers.dev`. Set the repository variable `WORKER_URL` if it changes. Set Worker variable `DAILY_ENABLED=false` to pause new automatic daily jobs. Existing render work can still drain. Hourly cron and GitHub Actions are polling schedules, not exact delivery-time guarantees. GitHub-hosted scheduling, Actions availability/quotas and Cloudflare usage must remain available.
+
+### Final review
+
+Finished videos appear inline with download links. Approval/rejection requires an owner key so a public visitor cannot approve a video. Configure `OWNER_TOKEN` as a Cloudflare Worker secret, then enter that value in the dashboard's password field. It stays in page memory and is not saved in browser storage. The dashboard explicitly reports when this key is not configured. Approval saves a decision only and never publishes. Rejection records feedback; regenerate creates a separate revision while preserving the original. Restrict the control room with Cloudflare Access if you want its previews and generation endpoints private.
+
+New API routes: `GET /api/daily`, `POST /api/daily/run`, `GET|HEAD /api/videos/<uuid>/video`, `GET /api/videos/<uuid>/poster`, `GET /api/videos/<uuid>/qa`, and owner-authenticated `POST /api/videos/<uuid>/review` with `{decision: 'approved' | 'rejected', note: string}`. Renderer-only claim/upload/complete/fail routes live under `/api/renderer/`.
+
+[Renderer setup and local reproduction](renderer/README.md).
+
+## Existing custom research/script workflow
 
 Enter a topic and click **Generate video job**. The Worker saves a D1 record and R2 brief, then starts a durable Cloudflare Workflow. It reads source pages, extracts source-backed facts, and generates a timed 30–45 second script using Workers AI. The dashboard polls progress and displays **Script ready for review** when the draft is saved. Click **Read script** for narration, captions, scene timing, visual directions and source links.
 
@@ -46,7 +76,7 @@ The additive schemas in `migrations/0001_jobs.sql` and `0002_production.sql` are
 After the build succeeds, open `/api/health`. Expect HTTP 200 and:
 
 ```json
-{"status":"ok","version":"0.4.0","storage":{"d1":true,"r2":true},"pipeline":{"ai":true,"workflow":true}}
+{"status":"ok","version":"0.5.0","storage":{"d1":true,"r2":true},"pipeline":{"ai":true,"workflow":true}}
 ```
 
 Health checks storage and binding presence; it does not make a paid inference request. Open the dashboard, create a job, wait for **Script ready for review**, and click **Read script** to check live inference and sources.
@@ -107,4 +137,4 @@ The same-origin check blocks cross-site browser submissions; it does not authent
 
 ## Next milestone
 
-Add editing and script approval, then voice, visuals, a vertical video renderer and final video approval.
+Connect current small-creator breakout research and comments, platform account publishing, and age-matched performance snapshots. Track retention, sharing, following, attributable revenue and production costs. Keep production and feedback versioned; do not invent analytics or claim a physical test from cartoon illustrations.

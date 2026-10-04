@@ -1,0 +1,43 @@
+name: Daily video production
+on:
+  schedule:
+    - cron: '37 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['src/**', 'renderer/**', 'migrations/**', 'wrangler.jsonc', '.github/workflows/daily-production.yml']
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: techfieldtest-render
+  cancel-in-progress: false
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      WORKER_URL: ${{ vars.WORKER_URL || 'https://techfieldtest.justing0406.workers.dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Claim a finished script
+        id: claim
+        run: python renderer/runner.py claim --work render-work ${{ github.event_name == 'push' && '--initial' || '' }}
+      - name: Install media tools
+        if: steps.claim.outputs.has_job == 'true'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg espeak-ng libseccomp2 fonts-dejavu-core
+      - name: Install renderer
+        if: steps.claim.outputs.has_job == 'true'
+        run: pip install -r renderer/requirements.txt
+      - name: Cache voice models
+        if: steps.claim.outputs.has_job == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/techfieldtest/models
+          key: kokoro-v1-int8-ae315a79-bca610b8
+      - name: Produce and save up to two videos
+        if: steps.claim.outputs.has_job == 'true'
+        run: python renderer/runner.py run --work render-work

@@ -2,6 +2,7 @@ import { WorkflowEntrypoint } from 'cloudflare:workers';
 import { ensureSchema } from './jobs.js';
 import { collectSources, selectSources } from './sources.js';
 import { generateResearch, generateScript, MODEL } from './generation.js';
+import { generateComedy } from './creative.js';
 
 const STEP_CONFIG = { retries: { limit: 1, delay: '5 seconds', backoff: 'exponential' }, timeout: '3 minutes' };
 const putJson = (env, key, data) => env.ASSETS.put(key, JSON.stringify(data, null, 2), { httpMetadata: { contentType: 'application/json' } });
@@ -47,17 +48,19 @@ export class ProductionWorkflow extends WorkflowEntrypoint {
     const { videoId, sourceUrls } = event.payload;
     const env = this.env;
     try {
-      const topic = await step.do('load-job', STEP_CONFIG, async () => {
+      const loaded = await step.do('load-job', STEP_CONFIG, async () => {
         await ensureSchema(env.DB);
         const row = await env.DB.prepare('SELECT * FROM videos WHERE id = ?').bind(videoId).first();
         if (!row || !['queued', 'researching'].includes(row.status)) throw new Error('The job is not ready for research.');
         await env.DB.prepare("UPDATE videos SET status = 'researching', error = NULL, updated_at = ? WHERE id = ?").bind(new Date().toISOString(), videoId).run();
-        return row.topic;
+        const brief = await env.ASSETS.get(row.manifest_key);
+        return { topic: row.topic, creativeBrief: brief ? (await brief.json()).creativeBrief : null };
       });
+      const { topic, creativeBrief } = typeof loaded === 'string' ? { topic: loaded, creativeBrief: null } : loaded;
 
       const researchKey = await step.do('research-source-pages', STEP_CONFIG, async () => {
         const collected = await collectSources(selectSources(topic, sourceUrls));
-        const research = await generateResearch(env.AI, topic, collected.sources, env.AI_MODEL || MODEL);
+        const research = await generateResearch(env.AI, topic, collected.sources, env.AI_MODEL || MODEL, Boolean(creativeBrief));
         const key = 'jobs/' + videoId + '/research.json';
         await putJson(env, key, { version: 1, videoId, topic, generatedAt: new Date().toISOString(), model: env.AI_MODEL || MODEL, ...collected, ...research });
         await env.DB.prepare('UPDATE production_runs SET research_key = ?, status = ?, updated_at = ? WHERE video_id = ?')
@@ -65,12 +68,13 @@ export class ProductionWorkflow extends WorkflowEntrypoint {
         return key;
       });
 
-      const scriptKey = await step.do('generate-script', STEP_CONFIG, async () => {
+      const scriptKey = await step.do('generate-script', { ...STEP_CONFIG, timeout: '10 minutes' }, async () => {
         await env.DB.prepare("UPDATE videos SET status = 'scripting', updated_at = ? WHERE id = ?").bind(new Date().toISOString(), videoId).run();
         const object = await env.ASSETS.get(researchKey);
         if (!object) throw new Error('Saved research is unavailable.');
         const research = await object.json();
-        const draft = await generateScript(env.AI, topic, research, env.AI_MODEL || MODEL);
+        const draft = creativeBrief ? await generateComedy(env.AI, topic, research, creativeBrief, env.AI_MODEL || MODEL)
+          : await generateScript(env.AI, topic, research, env.AI_MODEL || MODEL);
         const key = 'jobs/' + videoId + '/script.json';
         await putJson(env, key, { version: 1, videoId, generatedAt: new Date().toISOString(), model: env.AI_MODEL || MODEL, ...draft,
           facts: research.facts, uncertainties: research.uncertainties, testPlan: research.testPlan, sourceFailures: research.failures,
@@ -81,10 +85,18 @@ export class ProductionWorkflow extends WorkflowEntrypoint {
       });
 
       await step.do('mark-ready-for-review', STEP_CONFIG, async () => {
+        if (creativeBrief) {
+          const now = new Date().toISOString();
+          await env.DB.batch([
+            env.DB.prepare("INSERT INTO render_runs(video_id,status,created_at,updated_at) VALUES (?,'pending',?,?) ON CONFLICT(video_id) DO NOTHING").bind(videoId, now, now),
+            env.DB.prepare("UPDATE videos SET status='rendering', error=NULL, updated_at=? WHERE id=? AND status IN ('scripting','rendering')").bind(now, videoId),
+          ]);
+          return;
+        }
         await env.DB.prepare("UPDATE videos SET status = 'awaiting_approval', error = NULL, updated_at = ? WHERE id = ?")
           .bind(new Date().toISOString(), videoId).run();
       });
-      return { videoId, researchKey, scriptKey, status: 'script_ready' };
+      return { videoId, researchKey, scriptKey, status: creativeBrief ? 'render_pending' : 'script_ready' };
     } catch (error) {
       const message = String(error.message || error).slice(0, 400);
       await step.do('record-production-failure', STEP_CONFIG, async () => {

@@ -42,7 +42,7 @@ test('D1 jobs and R2 briefs persist, retries deduplicate, and invalid requests l
     assert.equal((await read(mf, '/api/health')).status, 'ok');
     assert.deepEqual((await read(mf, '/api/videos')).videos, []);
     const dashboard = await (await mf.dispatchFetch('https://example.com/')).text();
-    assert.match(dashboard, /Generate video job/);
+    assert.match(dashboard, /Research a custom topic/);
     assert.match(dashboard, /Waiting for research/);
     const response = await post(mf);
     assert.equal(response.status, 201);

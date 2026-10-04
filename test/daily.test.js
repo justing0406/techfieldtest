@@ -67,7 +67,7 @@ async function setup() {
     },
     { name: 'fake-ai', modules: true, compatibilityDate: '2026-10-03', script: `import { WorkerEntrypoint } from 'cloudflare:workers';
       export class FakeAI extends WorkerEntrypoint { async run(model,input) {
-        const task=input.prompt.split('\\n')[0];
+        const task=(input.prompt || input.messages[0].content).split('\\n')[0];
         const data=task==='TASK: RESEARCH' ? {facts:${JSON.stringify(RESEARCH_FACTS)},uncertainties:[],testPlan:[]}
           : task==='TASK: CONCEPTS' ? {concepts:${JSON.stringify(concepts)}}
           : task==='TASK: CONCEPT_EDITOR' ? {chosenIndex:0,reason:'Specific friend'}

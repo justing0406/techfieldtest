@@ -8,7 +8,7 @@ const factSchema = {
     dimension: { type: 'string', enum: ['capture', 'limits', 'workflow', 'pricing', 'integrations', 'privacy', 'other'] } },
 };
 const researchSchema = { type: 'object', additionalProperties: false, required: ['facts', 'uncertainties', 'testPlan'],
-  properties: { facts: { type: 'array', items: factSchema }, uncertainties: strings, testPlan: strings } };
+  properties: { facts: { type: 'array', minItems: 2, items: factSchema }, uncertainties: strings, testPlan: strings } };
 const sceneSchema = { type: 'object', additionalProperties: false, required: ['durationSeconds', 'narration', 'caption', 'visual', 'factIds'],
   properties: { durationSeconds: { type: 'integer' }, narration: string, caption: string, visual: string, factIds: strings } };
 const scriptSchema = { type: 'object', additionalProperties: false, required: ['title', 'scenes'],
@@ -98,7 +98,8 @@ export function validateScript(data, research) {
 }
 
 export async function modelJson(ai, model, prompt, schema, maxTokens, temperature = 0.15) {
-  const output = await ai.run(model, { prompt, temperature, max_tokens: maxTokens,
+  const input = model === MODEL ? { prompt } : { messages: [{ role: 'user', content: prompt }] };
+  const output = await ai.run(model, { ...input, temperature, max_tokens: maxTokens,
     response_format: { type: 'json_schema', json_schema: schema } });
   if (!output || output.error || output.errors) throw new Error('Generation service did not return a usable answer.');
   let value = output.response ?? output.choices?.[0]?.message?.content ?? output.output_text;

@@ -6,9 +6,9 @@ export const VOICES = ['am_puck', 'am_onyx', 'am_fenrir', 'af_heart'];
 export const SFX = ['pop', 'boing', 'stamp', 'tick', 'silence'];
 const str = { type: 'string' }, strings = { type: 'array', items: str };
 const object = properties => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties });
-const conceptSchema = object({ concepts: { type: 'array', items: object({ title: str, watchReason: str, shareReason: str, situation: str, punchline: str }) } });
+const conceptSchema = object({ concepts: { type: 'array', minItems: 3, maxItems: 3, items: object({ title: str, watchReason: str, shareReason: str, situation: str, punchline: str }) } });
 const selectionSchema = object({ chosenIndex: { type: 'integer' }, reason: str });
-const planSchema = object({ title: str, beats: { type: 'array', items: object({
+const planSchema = object({ title: str, beats: { type: 'array', minItems: 6, maxItems: 12, items: object({
   text: str, caption: str, layout: { type: 'string', enum: LAYOUTS }, actor: { type: 'string', enum: ACTORS },
   voice: { type: 'string', enum: VOICES }, sfx: { type: 'string', enum: SFX }, label: str, items: strings, factIds: strings,
 }) } });

@@ -45,6 +45,20 @@ test('multiple useful facts per source are accepted within a shared quote budget
   assert.equal(research.facts.length, 3);
 });
 
+test('daily chat models receive the full research task as a user message', async () => {
+  let captured;
+  const ai = { run: async (model, input) => {
+    captured = input;
+    return { response: data };
+  } };
+  await generateResearch(ai, 'Everyday dinner', sources, '@cf/meta/llama-3.3-70b-instruct-fp8-fast', true);
+  assert.equal(captured.prompt, undefined);
+  assert.equal(captured.messages[0].role, 'user');
+  assert.match(captured.messages[0].content, /Everyday dinner/);
+  assert.match(captured.messages[0].content, /SOURCE_DATA:/);
+  assert.equal(captured.response_format.json_schema.properties.facts.minItems, 2);
+});
+
 test('model output supports native, chat and Responses formats and editor failures are enforced', async () => {
   const research = validateResearch(data, sources);
   for (const wrap of [value => ({ choices: [{ message: { content: JSON.stringify(value) } }] }), value => ({ output: [{ type: 'reasoning', content: [{ type: 'output_text', text: 'ignore reasoning' }] }, { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: JSON.stringify(value) }] }] })]) {

@@ -180,6 +180,7 @@ export const dashboardHtml = `<!doctype html>
     const playingVideos = new Set();
     const videoPositions = new Map();
     const reviewFeedback = new Map();
+    let queueSnapshot = null;
     let approvalEnabled = false;
     const labels = { creating: "Saving", queued: "Waiting for research", researching: "Researching sources", scripting: "Writing script", rendering: "Rendering", awaiting_approval: "Script ready for review", approved: "Approved", published: "Published", failed: "Needs attention" };
 
@@ -227,6 +228,9 @@ export const dashboardHtml = `<!doctype html>
       document.getElementById("published").textContent = data.summary.published;
       document.getElementById("queueCount").textContent = data.summary.queued + " queued";
       const queue = document.getElementById("queue");
+      const nextSnapshot = JSON.stringify({ videos: data.videos, approvalEnabled });
+      if (nextSnapshot === queueSnapshot) return;
+      queueSnapshot = nextSnapshot;
       queue.replaceChildren();
       if (!data.videos.length) {
         const empty = document.createElement("div"); empty.className = "empty";

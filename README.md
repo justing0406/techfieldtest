@@ -2,6 +2,8 @@
 
 Control room for the TechFieldTest content pipeline: TikTok, Instagram Reels and YouTube Shorts.
 
+A [complete local production prototype](production/README.md) now produces an original 1080x1920 MP4 with narration, animated test visuals, captions and sound. Its first experiment demonstrates why a black rectangle can leave PDF text extractable. It includes a research brief and a verified synthetic test. This renderer is not yet connected to the deployed dashboard or platform publishing.
+
 ## V0.4: focused scripts and editorial review
 
 Enter a topic and click **Generate video job**. The Worker saves a D1 record and R2 brief, then starts a durable Cloudflare Workflow. It reads source pages, extracts source-backed facts, and generates a timed 30–45 second script using Workers AI. The dashboard polls progress and displays **Script ready for review** when the draft is saved. Click **Read script** for narration, captions, scene timing, visual directions and source links.

@@ -1,0 +1,42 @@
+{
+  "id": "tft-001-black-box",
+  "title": "This black box doesn't hide your secret",
+  "audienceHypothesis": "People who share PDFs at work and enjoy quick, surprising software demonstrations.",
+  "format": "Immediate contradiction, original experiment, early reveal, mechanism, fix, repeat test, shareable takeaway.",
+  "purpose": "Audience discovery and format validation. No affiliate offer is included; this short is not designed for TikTok Creator Rewards.",
+  "voice": "am_puck",
+  "voiceSpeed": 1.08,
+  "beats": [
+    {"id":"hook","text":"This black box is lying to you.","caption":"THIS BLACK BOX IS LYING","hold":0.10},
+    {"id":"cover","text":"I covered a fake PIN in this PDF. Looks hidden, right?","caption":"LOOKS HIDDEN. RIGHT?","hold":0.10},
+    {"id":"extract","text":"Then I extracted the text.","caption":"LET'S READ THE FILE","hold":0.15},
+    {"id":"reveal","text":"There it is. Four, eight, two, seven.","caption":"4827. STILL IN THE FILE.","hold":0.20},
+    {"id":"mechanism","text":"The rectangle covered the pixels. The PDF still had the words.","caption":"THE TEXT WAS STILL THERE","hold":0.10},
+    {"id":"curtain","text":"Your secret just got a curtain.","caption":"YOUR SECRET GOT A CURTAIN","hold":0.25},
+    {"id":"fix","text":"Now I use real redaction, apply it, and save a fresh copy.","caption":"REDACT. APPLY. SAVE.","hold":0.10},
+    {"id":"compare","text":"Same black box. Different result.","caption":"SAME LOOK. DIFFERENT FILE.","hold":0.10},
+    {"id":"verify","text":"Extract the text again. The PIN is gone.","caption":"THIS TIME: PIN REMOVED","hold":0.15},
+    {"id":"check","text":"Before sharing a sensitive PDF, check the exported file. Remove hidden information, too.","caption":"CHECK THE EXPORTED FILE","hold":0.10},
+    {"id":"share","text":"Send this to your black box friend.","caption":"SEND THIS TO YOUR BLACK BOX FRIEND","hold":0.55}
+  ],
+  "captionByPlatform": {
+    "youtubeTitle": "Your black box is lying to you #shorts",
+    "tiktok": "Your secret got a curtain. Fake PIN, real PDF test. Apply real redaction, save, check the exported copy, and remove hidden information. #TechFieldTest #PDF #TechTips",
+    "instagram": "A black rectangle can hide the view while leaving the text in the PDF. We tested a fake PIN: overlay = extractable; applied redaction = removed. Save and check the exported copy, and sanitize hidden information. Send this to your black-box friend. #TechFieldTest #PDF #TechTips"
+  },
+  "research": {
+    "checkedAt": "2026-10-04",
+    "formatReferences": [
+      {"url":"https://www.youtube.com/watch?v=eSucdOAIwrg","creator":"Mrwhosetheboss","title":"5 Most BRUTAL Tech Pranks Ever!","indexedViews":12250398,"indexedLikes":678000,"note":"Search-index snapshot, not live analytics. Playback was unavailable. This reference supports tech entertainment demand, not a shot-by-shot analysis."},
+      {"url":"https://www.youtube.com/watch?v=l3yfcRuts1I","creator":"Mrwhosetheboss Plus","title":"3 Nastiest Tech Pranks","indexedViews":28330816,"indexedLikes":2000000,"note":"Search-index snapshot, not live analytics. Playback was unavailable. No causal claim about format performance."},
+      {"url":"https://blog.youtube/creator-and-artist-stories/youtube-shorts-deep-dive/","note":"Official interview with Jenny Hoyos describes an immediate hook and shock, intrigue, satisfy storytelling."},
+      {"url":"https://www.wired.com/video/watch/autocomplete-interviews-mrwhosetheboss-answers-the-webs-most-searched-questions","note":"Creator describes Tech Pranks as one of his most successful Shorts series. This prototype adapts an entertainment premise, not his footage or script."}
+    ],
+    "factReferences": [
+      {"url":"https://helpx.adobe.com/acrobat/desktop/protect-documents/redact-pdfs/redact.html","note":"Apply redaction, then save the output; optional sanitization removes hidden information."},
+      {"url":"https://helpx.adobe.com/acrobat/desktop/protect-documents/redact-pdfs/sanitize.html","note":"Hidden information such as metadata needs separate sanitization."},
+      {"url":"https://pymupdf.readthedocs.io/en/latest/page.html","note":"Applied redaction removes covered text. Used for our reproducible synthetic test."}
+    ],
+    "limits": ["The audience and format are hypotheses, not validated account findings.","This is one original text-based PDF experiment, not a test of every redaction tool.","Text extraction is a useful check but does not prove removal of all hidden information.","Visuals replay verified generated files and extracted results; they are not recordings of Adobe Acrobat.","No competitor retention, conversions or revenue are available."]
+  }
+}
